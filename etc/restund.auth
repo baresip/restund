@@ -1,0 +1,19 @@
+#
+# restund.auth
+#
+# this file contains a list of authenticated users, with one
+# user per line in the format:
+#
+#     username:HA1
+#
+# the HA1 value can be calculated using util/genha1.sh
+#
+
+
+# sample user for testing:
+#
+#     username = demo
+#     realm    = myrealm
+#     password = secret
+#
+demo:c5dcdebd926706f33065ec3b65bf103c
