@@ -9,7 +9,7 @@
 #include "stund.h"
 
 
-const char *restund_software = "restund v" VERSION " (" ARCH "/" OS ")";
+const char *restund_software = "zt v" VERSION " (" ARCH "/" OS ")";
 
 
 static struct {

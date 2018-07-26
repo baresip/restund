@@ -243,6 +243,7 @@ void chanbind_request(struct allocation *al, struct restund_msgctx *ctx,
 
 	if (!chnr || !chan_numb_valid(chnr->v.channel_number) || !peer) {
 		restund_info("turn: bad chanbind attributes\n");
+		++turndp()->reply.scode_400;
 		rerr = stun_ereply(proto, sock, src, 0, msg,
 				   400, "Bad Attributes",
 				   ctx->key, ctx->keylen, ctx->fp, 1,
@@ -252,6 +253,7 @@ void chanbind_request(struct allocation *al, struct restund_msgctx *ctx,
 
 	if (sa_af(&peer->v.xor_peer_addr) != sa_af(&al->rel_addr)) {
 		restund_info("turn: chanbind peer address family mismatch\n");
+		++turndp()->reply.scode_443;
 		rerr = stun_ereply(proto, sock, src, 0, msg,
 				   443, "Peer Address Family Mismatch",
 				   ctx->key, ctx->keylen, ctx->fp, 1,
@@ -265,6 +267,7 @@ void chanbind_request(struct allocation *al, struct restund_msgctx *ctx,
 	if (ch_numb != ch_peer) {
 		restund_info("turn: channel %p/peer %p already bound\n",
 			     ch_numb, ch_peer);
+		++turndp()->reply.scode_400;
 		rerr = stun_ereply(proto, sock, src, 0, msg,
 				   400, "Channel/Peer Already Bound",
 				   ctx->key, ctx->keylen, ctx->fp, 1,
@@ -277,6 +280,7 @@ void chanbind_request(struct allocation *al, struct restund_msgctx *ctx,
 				   &peer->v.xor_peer_addr, al);
 		if (!chan) {
 			restund_info("turn: unable to create channel\n");
+			++turndp()->reply.scode_500;
 			rerr = stun_ereply(proto, sock, src, 0, msg,
 					  500, "Server Error",
 					  ctx->key, ctx->keylen, ctx->fp, 1,
@@ -290,6 +294,7 @@ void chanbind_request(struct allocation *al, struct restund_msgctx *ctx,
 		perm = perm_create(al->perms, &peer->v.xor_peer_addr, al);
 		if (!perm) {
 			restund_info("turn: unable to create permission\n");
+			++turndp()->reply.scode_500;
 			rerr = stun_ereply(proto, sock, src, 0, msg,
 					  500, "Server Error",
 					  ctx->key, ctx->keylen, ctx->fp, 1,

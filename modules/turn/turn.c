@@ -84,6 +84,7 @@ static bool request_handler(struct restund_msgctx *ctx, int proto, void *sock,
 	}
 
 	if (ctx->ua.typec > 0) {
+		++turnd.reply.scode_420;
 		err = stun_ereply(proto, sock, src, 0, msg,
 				  420, "Unknown Attribute",
 				  ctx->key, ctx->keylen, ctx->fp, 2,
@@ -96,8 +97,10 @@ static bool request_handler(struct restund_msgctx *ctx, int proto, void *sock,
 
 	if (!al && met != STUN_METHOD_ALLOCATE) {
 		restund_debug("turn: allocation does not exist\n");
+		++turnd.reply.scode_437;
 		err = stun_ereply(proto, sock, src, 0, msg,
-				  437, "Allocation Mismatch",
+				  437,
+				  "Allocation Mismatch (no such allocation)",
 				  ctx->key, ctx->keylen, ctx->fp, 1,
 				  STUN_ATTR_SOFTWARE, restund_software);
 		goto out;
@@ -109,6 +112,7 @@ static bool request_handler(struct restund_msgctx *ctx, int proto, void *sock,
 
 		if (!usr || strcmp(usr->v.username, al->username)) {
 			restund_debug("turn: wrong credetials\n");
+			++turnd.reply.scode_441;
 			err = stun_ereply(proto, sock, src, 0, msg,
 					  441, "Wrong Credentials",
 					  ctx->key, ctx->keylen, ctx->fp, 1,
@@ -282,6 +286,20 @@ static void stats_handler(struct mbuf *mb)
 }
 
 
+static void reply_handler(struct mbuf *mb)
+{
+	(void)mbuf_printf(mb, "scode_400 %u\n", turnd.reply.scode_400);
+	(void)mbuf_printf(mb, "scode_420 %u\n", turnd.reply.scode_420);
+	(void)mbuf_printf(mb, "scode_437 %u\n", turnd.reply.scode_437);
+	(void)mbuf_printf(mb, "scode_440 %u\n", turnd.reply.scode_440);
+	(void)mbuf_printf(mb, "scode_441 %u\n", turnd.reply.scode_441);
+	(void)mbuf_printf(mb, "scode_442 %u\n", turnd.reply.scode_442);
+	(void)mbuf_printf(mb, "scode_443 %u\n", turnd.reply.scode_443);
+	(void)mbuf_printf(mb, "scode_500 %u\n", turnd.reply.scode_500);
+	(void)mbuf_printf(mb, "scode_508 %u\n", turnd.reply.scode_508);
+}
+
+
 static struct restund_stun stun = {
 	.reqh = request_handler,
 	.indh = indication_handler,
@@ -301,6 +319,12 @@ static struct restund_cmdsub cmd_turnstats = {
 };
 
 
+static struct restund_cmdsub cmd_turnreply = {
+	.cmdh = reply_handler,
+	.cmd  = "turnreply",
+};
+
+
 static int module_init(void)
 {
 	uint32_t x, bsize = ALLOC_DEFAULT_BSIZE;
@@ -310,6 +334,7 @@ static int module_init(void)
 	restund_stun_register_handler(&stun);
 	restund_cmd_subscribe(&cmd_turn);
 	restund_cmd_subscribe(&cmd_turnstats);
+	restund_cmd_subscribe(&cmd_turnreply);
 
 	/* turn_external_addr */
 	if (!conf_get(restund_conf(), "turn_relay_addr", &opt))
@@ -337,6 +362,21 @@ static int module_init(void)
 	    !sa_isset(&turnd.rel_addr6, SA_ADDR)) {
 		restund_error("turn: no relay address configured\n");
 		err = EINVAL;
+		goto out;
+	}
+
+	/* turn_public_addr */
+	if (!conf_get(restund_conf(), "turn_public_addr", &opt)) {
+		err = sa_set(&turnd.public_addr, &opt, 0);
+
+		restund_info("turn: using public address %j\n",
+			     &turnd.public_addr);
+	}
+	else
+		sa_init(&turnd.public_addr, AF_UNSPEC);
+
+	if (err) {
+		restund_error("turn: bad turn_public_addr: '%r'\n", &opt);
 		goto out;
 	}
 
@@ -369,6 +409,7 @@ static int module_close(void)
 {
 	hash_flush(turnd.ht_alloc);
 	turnd.ht_alloc = mem_deref(turnd.ht_alloc);
+	restund_cmd_unsubscribe(&cmd_turnreply);
 	restund_cmd_unsubscribe(&cmd_turnstats);
 	restund_cmd_unsubscribe(&cmd_turn);
 	restund_stun_unregister_handler(&stun);

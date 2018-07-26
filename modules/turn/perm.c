@@ -255,6 +255,7 @@ void createperm_request(struct allocation *al, struct restund_msgctx *ctx,
 	hfail = (NULL != stun_msg_attr_apply(msg, attrib_handler, &cp));
 	if (cp.af_mismatch) {
 		restund_info("turn: creatperm peer address family mismatch\n");
+		++turndp()->reply.scode_443;
 		rerr = stun_ereply(proto, sock, src, 0, msg,
 				   443, "Peer Address Family Mismatch",
 				   ctx->key, ctx->keylen, ctx->fp, 1,
@@ -263,6 +264,7 @@ void createperm_request(struct allocation *al, struct restund_msgctx *ctx,
 	}
 	else if (hfail) {
 		restund_info("turn: unable to create permission\n");
+		++turndp()->reply.scode_500;
 		rerr = stun_ereply(proto, sock, src, 0, msg,
 				   500, "Server Error",
 				   ctx->key, ctx->keylen, ctx->fp, 1,
@@ -272,6 +274,7 @@ void createperm_request(struct allocation *al, struct restund_msgctx *ctx,
 
 	if (!cp.perml.head) {
 		restund_info("turn: no peer-addr attributes\n");
+		++turndp()->reply.scode_400;
 		rerr = stun_ereply(proto, sock, src, 0, msg,
 				   400, "No Peer Attributes",
 				   ctx->key, ctx->keylen, ctx->fp, 1,

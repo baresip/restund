@@ -22,6 +22,11 @@ static struct {
 	uint64_t secret;
 } auth;
 
+static struct {
+	uint64_t req_no_mi;
+	uint64_t req_mi;
+} authstats;
+
 
 static const char *mknonce(char *nonce, time_t now, const struct sa *src)
 {
@@ -103,6 +108,13 @@ static bool request_handler(struct restund_msgctx *ctx, int proto, void *sock,
 	realm = stun_msg_attr(msg, STUN_ATTR_REALM);
 	nonce = stun_msg_attr(msg, STUN_ATTR_NONCE);
 
+	if (mi) {
+		++authstats.req_mi;
+	}
+	else {
+		++authstats.req_no_mi;
+	}
+
 	if (!mi) {
 		err = stun_ereply(proto, sock, src, 0, msg,
 				  401, "Unauthorized",
@@ -183,6 +195,19 @@ static struct restund_stun stun = {
 };
 
 
+static void stats_handler(struct mbuf *mb)
+{
+	(void)mbuf_printf(mb, "auth_req_mi %llu\n",    authstats.req_mi);
+	(void)mbuf_printf(mb, "auth_req_no_mi %llu\n", authstats.req_no_mi);
+}
+
+
+static struct restund_cmdsub cmd_authstats = {
+	.cmdh = stats_handler,
+	.cmd  = "authstats",
+};
+
+
 static int module_init(void)
 {
 	auth.nonce_expiry = NONCE_EXPIRY;
@@ -191,6 +216,8 @@ static int module_init(void)
 	conf_get_u32(restund_conf(), "auth_nonce_expiry", &auth.nonce_expiry);
 
 	restund_stun_register_handler(&stun);
+
+	restund_cmd_subscribe(&cmd_authstats);
 
 	restund_debug("auth: module loaded (nonce_expiry=%us)\n",
 		      auth.nonce_expiry);
@@ -201,6 +228,7 @@ static int module_init(void)
 
 static int module_close(void)
 {
+	restund_cmd_unsubscribe(&cmd_authstats);
 	restund_stun_unregister_handler(&stun);
 
 	restund_debug("auth: module closed\n");

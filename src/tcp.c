@@ -317,6 +317,32 @@ static struct restund_cmdsub cmd_tcp = {
 };
 
 
+static void stats_handler(struct mbuf *mb)
+{
+	uint64_t n_tcp = 0, n_tls = 0;
+	struct le *le;
+
+	for (le = tcl.head; le; le = le->next) {
+
+		struct conn *conn = le->data;
+
+		if (conn->tlsc)
+			++n_tls;
+		else
+			++n_tcp;
+	}
+
+	(void)mbuf_printf(mb, "tcp_connections %llu\n", n_tcp);
+	(void)mbuf_printf(mb, "tls_connections %llu\n", n_tls);
+}
+
+
+static struct restund_cmdsub cmd_tcpstats = {
+	.cmdh = stats_handler,
+	.cmd  = "tcpstats",
+};
+
+
 int restund_tcp_init(void)
 {
 	bool tls;
@@ -326,6 +352,7 @@ int restund_tcp_init(void)
 	list_init(&tcl);
 
 	restund_cmd_subscribe(&cmd_tcp);
+	restund_cmd_subscribe(&cmd_tcpstats);
 
 	/* tcp config */
 	tls = false;
@@ -351,6 +378,7 @@ int restund_tcp_init(void)
 void restund_tcp_close(void)
 {
 	restund_cmd_unsubscribe(&cmd_tcp);
+	restund_cmd_unsubscribe(&cmd_tcpstats);
 	list_flush(&lstnrl);
 	list_flush(&tcl);
 }

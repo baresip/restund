@@ -232,10 +232,12 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 	struct stun_attr *reqaf, *attr, *even, *rsvt;
 	struct allocation *al = NULL;
 	const struct sa *rel_addr;
+	struct sa public_addr;
 	uint32_t lifetime;
 	int err = 0, rerr;
 	uint64_t rsv;
 	uint8_t af;
+	bool public = false;
 
 	/* Existing allocation */
 	if (alx) {
@@ -246,8 +248,9 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 		}
 
 		restund_debug("turn: allocation already exists (%J)\n", src);
+		++turnd->reply.scode_437;
 		rerr = stun_ereply(proto, sock, src, 0, msg,
-				   437, "Allocation Mismatch",
+				   437, "Allocation TID Mismatch",
 				   ctx->key, ctx->keylen, ctx->fp, 1,
 				   STUN_ATTR_SOFTWARE, restund_software);
 		goto out;
@@ -260,6 +263,7 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 	rel_addr = relay_addr(turnd, af);
 	if (!sa_isset(rel_addr, SA_ADDR)) {
 		restund_info("turn: unsupported address family: %u\n", af);
+		++turnd->reply.scode_440;
 		rerr = stun_ereply(proto, sock, src, 0, msg,
 				   440, "Address Family not Supported",
 				   ctx->key, ctx->keylen, ctx->fp, 1,
@@ -271,6 +275,7 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 	attr = stun_msg_attr(msg, STUN_ATTR_REQ_TRANSPORT);
 	if (!attr) {
 		restund_info("turn: requested transport missing\n");
+		++turnd->reply.scode_400;
 		rerr = stun_ereply(proto, sock, src, 0, msg,
 				   400, "Requested Transport Missing",
 				   ctx->key, ctx->keylen, ctx->fp, 1,
@@ -280,6 +285,7 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 	else if (attr->v.req_transport != IPPROTO_UDP) {
 		restund_info("turn: unsupported transport protocol: %u\n",
 			     attr->v.req_transport);
+		++turnd->reply.scode_442;
 		rerr = stun_ereply(proto, sock, src, 0, msg,
 				   442, "Unsupported Transport Protocol",
 				   ctx->key, ctx->keylen, ctx->fp, 1,
@@ -296,6 +302,7 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 		ua.typec = 1;
 
 		restund_info("turn: requested don't fragment\n");
+		++turnd->reply.scode_420;
 		rerr = stun_ereply(proto, sock, src, 0, msg,
 				   420, "Unknown Attribute",
 				   ctx->key, ctx->keylen, ctx->fp, 2,
@@ -309,6 +316,7 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 	rsvt = stun_msg_attr(msg, STUN_ATTR_RSV_TOKEN);
 	if ((even && rsvt) || (reqaf && rsvt)) {
 		restund_info("turn: even-port/req-af + rsv-token requested\n");
+		++turnd->reply.scode_400;
 		rerr = stun_ereply(proto, sock, src, 0, msg,
 				   400, "Bad Request",
 				   ctx->key, ctx->keylen, ctx->fp, 1,
@@ -326,6 +334,7 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 	al = mem_zalloc(sizeof(*al), destructor);
 	if (!al) {
 		restund_warning("turn: no memory for allocation\n");
+		++turnd->reply.scode_500;
 		rerr = stun_ereply(proto, sock, src, 0, msg,
 				   500, "Server Error",
 				   ctx->key, ctx->keylen, ctx->fp, 1,
@@ -350,6 +359,7 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 	err = perm_hash_alloc(&al->perms, PERM_HASH_SIZE);
 	if (err) {
 		restund_warning("turn: perm list alloc: %m\n", err);
+		++turnd->reply.scode_500;
 		rerr = stun_ereply(proto, sock, src, 0, msg,
 				   500, "Server Error",
 				   ctx->key, ctx->keylen, ctx->fp, 1,
@@ -361,6 +371,7 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 	err = chanlist_alloc(&al->chans, CHAN_HASH_SIZE);
 	if (err) {
 		restund_warning("turn: chan list alloc: %m\n", err);
+		++turnd->reply.scode_500;
 		rerr = stun_ereply(proto, sock, src, 0, msg,
 				   500, "Server Error",
 				   ctx->key, ctx->keylen, ctx->fp, 1,
@@ -377,6 +388,7 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 
 	if (err) {
 		restund_warning("turn: relay listen: %m\n", err);
+		++turnd->reply.scode_508;
 		rerr = stun_ereply(proto, sock, src, 0, msg,
 				   508, "Insufficient Port Capacity",
 				   ctx->key, ctx->keylen, ctx->fp, 1,
@@ -401,9 +413,21 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 		rsv += sa_port(&alx->rsv_addr);
 	}
 
+	/* handle NAT'ed turn-server with public IP-address */
+	if (sa_isset(&turnd->public_addr, SA_ADDR)) {
+
+		public_addr = turnd->public_addr;
+		sa_set_port(&public_addr, sa_port(&alx->rel_addr));
+		public = true;
+
+		restund_info("turn: mapping to public:  %J  -->  %J\n",
+			     &alx->rel_addr, &public_addr);
+	}
+
 	err = rerr = stun_reply(proto, sock, src, 0, msg,
 				ctx->key, ctx->keylen, ctx->fp, 5,
-				STUN_ATTR_XOR_RELAY_ADDR, &alx->rel_addr,
+				STUN_ATTR_XOR_RELAY_ADDR,
+				public ? &public_addr : &alx->rel_addr,
 				STUN_ATTR_LIFETIME, &lifetime,
 				STUN_ATTR_RSV_TOKEN, alx->rsv_us ? &rsv : NULL,
 				STUN_ATTR_XOR_MAPPED_ADDR, src,
@@ -429,6 +453,7 @@ void refresh_request(struct turnd *turnd, struct allocation *al,
 	attr = stun_msg_attr(msg, STUN_ATTR_REQ_ADDR_FAMILY);
 	if (attr && attr->v.req_addr_family != sa_stunaf(&al->rel_addr)) {
 		restund_info("turn: refresh address family mismatch\n");
+		++turnd->reply.scode_443;
 		err = stun_ereply(proto, sock, src, 0, msg,
 				  443, "Peer Address Family Mismatch",
 				  ctx->key, ctx->keylen, ctx->fp, 1,

@@ -7,6 +7,7 @@
 struct turnd {
 	struct sa rel_addr;
 	struct sa rel_addr6;
+	struct sa public_addr;
 	struct hash *ht_alloc;
 	uint64_t bytec_tx;
 	uint64_t bytec_rx;
@@ -16,6 +17,18 @@ struct turnd {
 	uint32_t allocc_cur;
 	uint32_t lifetime_max;
 	uint32_t udp_sockbuf_size;
+
+	struct {
+		uint64_t scode_400;
+		uint64_t scode_420;
+		uint64_t scode_437;
+		uint64_t scode_440;
+		uint64_t scode_441;
+		uint64_t scode_442;
+		uint64_t scode_443;
+		uint64_t scode_500;
+		uint64_t scode_508;
+	} reply;
 };
 
 struct chanlist;
