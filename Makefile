@@ -40,6 +40,8 @@ ifneq ($(STATIC),)
 CFLAGS    += -DSTATIC=1
 endif
 
+CFLAGS	+= $(EXTRA_CFLAGS)
+
 
 # Optional syslog module
 ifneq ($(OS),win32)
