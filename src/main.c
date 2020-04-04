@@ -17,8 +17,6 @@
 #include "stund.h"
 
 
-#define MAX_FDS 15000
-
 static const char *configfile = "/etc/restund.conf";
 static struct conf *conf;
 static bool force_debug;
@@ -212,7 +210,7 @@ int main(int argc, char *argv[])
  		goto out;
  	}
 
- 	err = fd_setsize(min((int)limits.rlim_max - 42, MAX_FDS));
+ 	err = fd_setsize((int)limits.rlim_max - 42);
 	if (err) {
 		restund_warning("fd_setsize error: %m\n", err);
 		goto out;
