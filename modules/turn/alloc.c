@@ -414,8 +414,8 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 	}
 
 	/* handle NAT'ed turn-server with public IP-address */
-	if (sa_isset(&turnd->public_addr, SA_ADDR)) {
-
+	af = sa_stunaf(&alx->rel_addr);
+	if (af == STUN_AF_IPv4 && sa_isset(&turnd->public_addr, SA_ADDR)) {
 		public_addr = turnd->public_addr;
 		sa_set_port(&public_addr, sa_port(&alx->rel_addr));
 		public = true;
