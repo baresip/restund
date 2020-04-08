@@ -420,7 +420,7 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 		sa_set_port(&public_addr, sa_port(&alx->rel_addr));
 		public = true;
 
-		restund_info("turn: mapping to public:  %J  -->  %J\n",
+		restund_debug("turn: mapping to public:  %J  -->  %J\n",
 			     &alx->rel_addr, &public_addr);
 	}
 

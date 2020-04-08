@@ -108,7 +108,7 @@ static int auth_handler(const char *user, uint8_t *ha1)
 	else if (0 == re_regex(user, strlen(user),
 			       "[0-9]+.s.[0-9]*", &expires, NULL)) {
 
-		restund_info("zrest: auth version 0\n");
+		restund_debug("zrest: auth version 0\n");
 	}
 	else {
 		restund_info("zrest: could not parse username (%s)\n", user);
@@ -193,7 +193,7 @@ static int module_init(void)
 	err = conf_get_str(restund_conf(), "zrest_secret", zrest.secret,
 			   sizeof(zrest.secret));
 	if (err) {
-		restund_error("zrest: missing config 'rest_secret'\n");
+		restund_error("zrest: missing config 'zrest_secret'\n");
 		return err;
 	}
 

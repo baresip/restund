@@ -5,7 +5,7 @@
 static bool is_draining = false;
 
 /*
- * Iff is_draining == true, prevents new allocations and denies allocation
+ * If is_draining == true, prevents new allocations and denies allocation
  * refresh by replying with a '508 Insufficient Capacity' message.
  */
 static bool request_handler(struct restund_msgctx *ctx, int proto, void *sock,
