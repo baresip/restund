@@ -15,7 +15,7 @@ VER_PATCH := 14
 PROJECT   := restund
 VERSION   := $(VER_MAJOR).$(VER_MINOR).$(VER_PATCH)
 
-MODULES	  := binding auth turn stat status filedb restauth
+MODULES	  := binding auth turn stat status filedb restauth zrest drain
 MODULES	  += $(EXTRA_MODULES)
 
 LIBRE_MK  := $(shell [ -f ../re/mk/re.mk ] && \
