@@ -185,7 +185,7 @@ static bool indication_handler(struct restund_msgctx *ctx, int proto,
 		return true;
 	}
 
-	if (sa_is_loopback(psa) || sa_is_any(psa))
+	if (sa_is_loopback(psa) || sa_is_any(psa) || sa_is_linklocal(psa))
 		err = EPERM;
 	else
 		err = udp_send(al->rel_us, psa, &data->v.data);
@@ -238,7 +238,7 @@ static bool raw_handler(int proto, const struct sa *src,
 
 	mb->end = mb->pos + len;
 
-	if (sa_is_loopback(psa) || sa_is_any(psa))
+	if (sa_is_loopback(psa) || sa_is_any(psa) || sa_is_linklocal(psa))
 		err = EPERM;
 	else
 		err = udp_send(al->rel_us, psa, mb);
