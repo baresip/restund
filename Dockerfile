@@ -11,5 +11,10 @@ RUN mkdir -p build && curl -sSLf https://github.com/creytiv/re/archive/v0.4.15.t
 COPY . /build/restund
 WORKDIR /build/restund
 
-RUN make -C /build/re-0.4.15 RELEASE=1 EXTRA_CFLAGS="-std=gnu99" && make -C /build/re-0.4.15 PREFIX=/usr/local install
+RUN make -C /build/re-0.4.15 RELEASE=1 EXTRA_CFLAGS="-std=gnu99" && make -C /build/re-0.4.15 PREFIX=/usr/local install && ldconfig
 RUN make -C /build/restund RELEASE=1 EXTRA_CFLAGS="-std=gnu99" && make -C /build/restund PREFIX=/usr/local install
+RUN apt-get remove -y make gcc && apt-get autoremove -y
+
+VOLUME /etc/restund.conf
+VOLUME /etc/restund.auth
+ENTRYPOINT [ "/usr/local/sbin/restund", "-n" ]
