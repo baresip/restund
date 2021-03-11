@@ -148,6 +148,22 @@ static bool request_handler(struct restund_msgctx *ctx, int proto, void *sock,
 	return true;
 }
 
+static inline bool is_loopback(const struct sa *sa)
+{
+	return (ntohl(sa->u.in.sin_addr.s_addr) & 0xffffff00) == 0x7f000000;
+}
+
+static inline bool is_broadcast(const struct sa *sa)
+{
+	return ntohl(sa->u.in.sin_addr.s_addr) == 0xffffffff;
+}
+
+static inline bool is_blocked(const struct sa *sa)
+{
+	return is_loopback(sa) || is_broadcast(sa)
+		|| sa_is_any(sa) || sa_is_linklocal(sa);
+	
+}
 
 static bool indication_handler(struct restund_msgctx *ctx, int proto,
 			       void *sock, const struct sa *src,
@@ -185,7 +201,7 @@ static bool indication_handler(struct restund_msgctx *ctx, int proto,
 		return true;
 	}
 
-	if (sa_is_loopback(psa) || sa_is_any(psa) || sa_is_linklocal(psa))
+	if (is_blocked(psa))
 		err = EPERM;
 	else
 		err = udp_send(al->rel_us, psa, &data->v.data);
@@ -238,7 +254,7 @@ static bool raw_handler(int proto, const struct sa *src,
 
 	mb->end = mb->pos + len;
 
-	if (sa_is_loopback(psa) || sa_is_any(psa) || sa_is_linklocal(psa))
+	if (is_blocked(psa))
 		err = EPERM;
 	else
 		err = udp_send(al->rel_us, psa, mb);
