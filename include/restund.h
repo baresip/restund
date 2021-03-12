@@ -130,6 +130,7 @@ struct tcp_sock *restund_tcp_socket(struct sa *sa, const struct sa *orig,
 struct dtls_sock *restund_dtls_socket(struct sa *sa, const struct sa *orig,
 				      bool ch_ip, bool ch_port);
 
+bool restund_addr_is_blocked(const struct sa *sa);
 
 /*
  * Modules

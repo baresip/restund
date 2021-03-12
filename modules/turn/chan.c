@@ -251,6 +251,16 @@ void chanbind_request(struct allocation *al, struct restund_msgctx *ctx,
 		goto out;
 	}
 
+	if (restund_addr_is_blocked(&peer->v.xor_peer_addr)) {
+		restund_info("turn: blocked address\n");
+		++turndp()->reply.scode_400;
+		rerr = stun_ereply(proto, sock, src, 0, msg,
+				   403, "Forbidden",
+				   ctx->key, ctx->keylen, ctx->fp, 1,
+				   STUN_ATTR_SOFTWARE, restund_software);
+		goto out;
+	}
+
 	if (sa_af(&peer->v.xor_peer_addr) != sa_af(&al->rel_addr)) {
 		restund_info("turn: chanbind peer address family mismatch\n");
 		++turndp()->reply.scode_443;
