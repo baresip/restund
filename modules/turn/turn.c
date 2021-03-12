@@ -157,6 +157,7 @@ static bool indication_handler(struct restund_msgctx *ctx, int proto,
 	struct stun_attr *data, *peer;
 	struct allocation *al;
 	struct perm *perm;
+	const struct sa *psa;
 	int err;
 	(void)sock;
 	(void)ctx;
@@ -177,13 +178,17 @@ static bool indication_handler(struct restund_msgctx *ctx, int proto,
 	if (!peer || !data)
 		return true;
 
-	perm = perm_find(al->perms, &peer->v.xor_peer_addr);
+	psa = &peer->v.xor_peer_addr;
+	perm = perm_find(al->perms, psa);
 	if (!perm) {
 		++al->dropc_tx;
 		return true;
 	}
 
-	err = udp_send(al->rel_us, &peer->v.xor_peer_addr, &data->v.data);
+	if (restund_addr_is_blocked(psa))
+		err = EPERM;
+	else
+		err = udp_send(al->rel_us, psa, &data->v.data);
 	if (err)
 		turnd.errc_tx++;
 	else {
@@ -204,6 +209,7 @@ static bool raw_handler(int proto, const struct sa *src,
 	uint16_t numb, len;
 	struct perm *perm;
 	struct chan *chan;
+	const struct sa *psa;
 	int err;
 
 	al = allocation_find(proto, src, dst);
@@ -223,7 +229,8 @@ static bool raw_handler(int proto, const struct sa *src,
 	if (!chan)
 		return false;
 
-	perm = perm_find(al->perms, chan_peer(chan));
+	psa = chan_peer(chan);
+	perm = perm_find(al->perms, psa);
 	if (!perm) {
 		++al->dropc_tx;
 		return false;
@@ -231,7 +238,10 @@ static bool raw_handler(int proto, const struct sa *src,
 
 	mb->end = mb->pos + len;
 
-	err = udp_send(al->rel_us, chan_peer(chan), mb);
+	if (restund_addr_is_blocked(psa))
+		err = EPERM;
+	else
+		err = udp_send(al->rel_us, psa, mb);
 	if (err)
 		turnd.errc_tx++;
 	else {

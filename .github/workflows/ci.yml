@@ -1,0 +1,19 @@
+on:
+  push:
+    branches: [master]
+  pull_request:
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build container
+        run: |
+          git_hash=$(git rev-parse --short "$GITHUB_SHA")
+          docker build . -t quay.io/wire/restund:$git_hash
+          docker run --network=host --volume $(pwd)/etc/restund.conf:/etc/restund.conf:ro --volume $(pwd)/etc/restund.auth:/etc/restund.auth quay.io/wire/restund:$git_hash &
+      - name: Test if relaying localhost and friends is blocked
+        run: |
+          sudo apt-get update && sudo apt-get install -y coturn
+          ./test.sh
