@@ -107,7 +107,14 @@ void restund_stun_unregister_handler(struct restund_stun *stun)
 
 static inline bool is_loopback(const struct sa *sa)
 {
-       return (ntohl(sa->u.in.sin_addr.s_addr) & 0xffffff00) == 0x7f000000;
+        if (!sa)
+                return false;
+        switch (sa_af(sa)) {
+        case AF_INET:
+                return (ntohl(sa->u.in.sin_addr.s_addr) & 0xffffff00) == 0x7f000000;
+        default:
+                return sa_is_loopback(sa);
+        }
 }
 
 static inline bool is_broadcast(const struct sa *sa)
