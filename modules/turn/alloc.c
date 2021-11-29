@@ -90,13 +90,20 @@ static void udp_recv(const struct sa *src, struct mbuf *mb, void *arg)
 		}
 	}
 
-	perm = perm_find(al->perms, src);
-	if (!perm) {
-		++al->dropc_rx;
-		return;
+	if (!al->relaxed) {
+		perm = perm_find(al->perms, src);
+		if (!perm) {
+			++al->dropc_rx;
+			return;
+		}
 	}
 
 	chan = chan_peer_find(al->chans, src);
+	if (!chan && al->relaxed) {
+		restund_debug("udp_recv: relaxed mode: creating for: %J\n",
+			      src);
+		chan = chan_create(al->chans, 9999, src, al);
+	}
 	if (chan) {
 		uint16_t len = mbuf_get_left(mb);
 		size_t start;
@@ -120,6 +127,7 @@ static void udp_recv(const struct sa *src, struct mbuf *mb, void *arg)
 		}
 
 		mb->pos = start;
+		restund_debug("restund: stun_send to: %J\n", &al->cli_addr);
 		err = stun_send(al->proto, al->cli_sock, &al->cli_addr, mb);
 		mb->pos += 4;
 	}
@@ -238,6 +246,7 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 	uint64_t rsv;
 	uint8_t af;
 	bool public = false;
+	char *uname;
 
 	/* Existing allocation */
 	if (alx) {
@@ -345,7 +354,17 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 	hash_append(turnd->ht_alloc, sa_hash(src, SA_ALL), &al->he, al);
 	tmr_start(&al->tmr, lifetime * 1000, timeout, al);
 	attr = stun_msg_attr(msg, STUN_ATTR_USERNAME);
-	al->username = mem_ref(attr ? attr->v.username : NULL);
+	if (attr) {
+		uname = attr->v.username;
+		if (strstr(uname, SFT_TOKEN) == uname) {
+			al->relaxed = true;
+			//uname += str_len(SFT_TOKEN);
+		}
+	}
+	if (uname)
+		str_dup(&al->username, uname);
+	else
+		al->username = NULL;
 	memcpy(al->tid, stun_msg_tid(msg), sizeof(al->tid));
 	al->cli_sock = mem_ref(sock);
 	al->cli_addr = *src;

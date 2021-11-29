@@ -97,6 +97,7 @@ static bool request_handler(struct restund_msgctx *ctx, int proto, void *sock,
 	struct stun_attr *mi, *user, *realm, *nonce;
 	const time_t now = time(NULL);
 	char nstr[NONCE_MAX_SIZE + 1];
+	char *uname;
 	int err;
 	(void)dst;
 
@@ -154,10 +155,10 @@ static bool request_handler(struct restund_msgctx *ctx, int proto, void *sock,
 	}
 
 	ctx->keylen = MD5_SIZE;
-
-	if (restund_get_ha1(user->v.username, ctx->key)) {
+	uname = user->v.username;
+	if (restund_get_ha1(uname, ctx->key)) {
 		restund_info("auth: unknown user '%s' (%j)\n",
-			     user->v.username, src);
+			     uname, src);
 		err = stun_ereply(proto, sock, src, 0, msg,
 				  401, "Unauthorized",
 				  NULL, 0, ctx->fp, 3,
@@ -169,7 +170,7 @@ static bool request_handler(struct restund_msgctx *ctx, int proto, void *sock,
 
 	if (stun_msg_chk_mi(msg, ctx->key, ctx->keylen)) {
 		restund_info("auth: bad password for user '%s' (%j)\n",
-			     user->v.username, src);
+			     uname, src);
 		err = stun_ereply(proto, sock, src, 0, msg,
 				  401, "Unauthorized",
 				  NULL, 0, ctx->fp, 3,

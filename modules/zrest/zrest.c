@@ -12,6 +12,9 @@
 #include <openssl/hmac.h>
 #include <openssl/err.h>
 
+#ifndef SHA512_DIGEST_LENGTH
+#define SHA512_DIGEST_LENGTH 64
+#endif
 
 /*
  * This module implements a REST-based authentication mechanism
@@ -49,15 +52,20 @@ static void generate_username_v0(char *user, size_t sz, uint32_t ttl)
 #endif
 
 
-static void generate_username_v1(char *user, size_t sz, uint32_t ttl)
+static void generate_username_v1(struct pl *puser,
+				 char *user, size_t sz, uint32_t ttl)
 {
 	char x[42];
 	time_t now = time(NULL);
+	bool issft;
+
+	issft = puser ? pl_strcmp(puser, "sft") == 0 : false;
 
 	rand_str(x, sizeof(x));
 
 	re_snprintf(user, sz,
-		    "d=%llu.v=1.k=0.t=s.r=%s",
+		    "%sd=%llu.v=1.k=0.t=s.r=%s",
+		    issft ? SFT_TOKEN : "",
 		    (uint64_t)(now + ttl), x);
 }
 
@@ -89,6 +97,7 @@ static int generate_password(char *pass, size_t *passlen, const char *user)
 static int auth_handler(const char *user, uint8_t *ha1)
 {
 	struct pl expires;
+	bool expiry = true;
 	time_t expi;
 	char pass[256];
 	size_t passlen = sizeof(pass);
@@ -101,10 +110,16 @@ static int auth_handler(const char *user, uint8_t *ha1)
 			  &expires, &pl_keyindex, NULL)) {
 
 		keyindex = pl_u32(&pl_keyindex);
-
-		restund_debug("zrest: auth version 1 (keyindex=%u)\n",
-			     keyindex);
 	}
+	else if (0 == re_regex(user, strlen(user),
+			  SFT_TOKEN"d=[0-9]+.v=1.k=[0-9]+.t=s.r=[a-z0-9]*",
+			  &expires, &pl_keyindex, NULL)) {
+
+		keyindex = pl_u32(&pl_keyindex);
+
+		restund_debug("zrest: SFT auth version 1 (keyindex=%u)\n",
+			     keyindex);
+	}	
 	else if (0 == re_regex(user, strlen(user),
 			       "[0-9]+.s.[0-9]*", &expires, NULL)) {
 
@@ -114,12 +129,19 @@ static int auth_handler(const char *user, uint8_t *ha1)
 		restund_info("zrest: could not parse username (%s)\n", user);
 		return EPROTO;
 	}
+	/* Don't expire SFT user */
+	if (strstr(user, SFT_TOKEN) == user) {
+		expiry = false;
+	}
 
-	expi = (time_t)pl_u64(&expires);
-	if (expi < time(NULL)) {
-		restund_debug("zrest: username expired %lli seconds ago\n",
-			      time(NULL) - pl_u64(&expires));
-		return ETIMEDOUT;
+	if (expiry) {
+		expi = (time_t)pl_u64(&expires);
+		if (expi < time(NULL)) {
+			restund_debug("zrest: username expired %lli "
+				      "seconds ago\n",
+				      time(NULL) - pl_u64(&expires));
+			return ETIMEDOUT;
+		}
 	}
 
 	err = generate_password(pass, &passlen, user);
@@ -129,7 +151,7 @@ static int auth_handler(const char *user, uint8_t *ha1)
 		return err;
 	}
 
-	restund_debug("zrest: VALID username token :)\n");
+	restund_debug("zrest: user=%s\n pass=%s\n", user, pass);
 
 	return md5_printf(ha1, "%s:%s:%b",
 			  user, restund_realm(), pass, passlen);
@@ -155,7 +177,7 @@ static void http_req_handler(struct http_conn *conn,
 		return;
 	}
 
-	generate_username_v1(tsuser, sizeof(tsuser), ttl);
+	generate_username_v1(&username, tsuser, sizeof(tsuser), ttl);
 
 	err = generate_password(pass, &passlen, tsuser);
 	if (err) {
@@ -209,7 +231,7 @@ static int module_init(void)
 	if (1) {
 		char user[256], pass[256];
 		size_t passlen = sizeof(pass);
-		generate_username_v1(user, sizeof(user), 60);
+		generate_username_v1(NULL, user, sizeof(user), 60);
 		err = generate_password(pass, &passlen, user);
 		if (err) {
 			restund_error("zrest: failed to generate password"
@@ -262,7 +284,7 @@ static int module_close(void)
 }
 
 
-const struct mod_export exports = {
+const struct mod_export DECL_EXPORTS(zrest) = {
 	.name  = "zrest",
 	.type  = "auth",
 	.init  = module_init,

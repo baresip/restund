@@ -6,6 +6,8 @@
 
 #include <time.h>
 
+#define SFT_TOKEN "sft-"
+
 /* cmd */
 
 typedef void(restund_cmd_h)(struct mbuf *mb);

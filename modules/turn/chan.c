@@ -183,9 +183,9 @@ void chan_status(const struct chanlist *cl, struct mbuf *mb)
 }
 
 
-static struct chan *chan_create(struct chanlist *cl, uint16_t numb,
-				const struct sa *peer,
-				const struct allocation *al)
+struct chan *chan_create(struct chanlist *cl, uint16_t numb,
+			 const struct sa *peer,
+			 const struct allocation *al)
 {
 	struct chan *chan;
 

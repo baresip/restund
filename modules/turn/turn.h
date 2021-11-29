@@ -50,6 +50,8 @@ struct allocation {
 	uint64_t dropc_tx;
 	uint64_t dropc_rx;
 	int proto;
+
+	bool relaxed;
 };
 
 void allocate_request(struct turnd *turnd, struct allocation *alx,
@@ -85,6 +87,9 @@ struct chan;
 
 struct chan *chan_numb_find(const struct chanlist *cl, uint16_t numb);
 struct chan *chan_peer_find(const struct chanlist *cl, const struct sa *peer);
+struct chan *chan_create(struct chanlist *cl, uint16_t numb,
+			 const struct sa *peer,
+			 const struct allocation *al);
 uint16_t chan_numb(const struct chan *chan);
 const struct sa *chan_peer(const struct chan *chan);
 int  chanlist_alloc(struct chanlist **clp, uint32_t bsize);

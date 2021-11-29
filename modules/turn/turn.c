@@ -109,9 +109,10 @@ static bool request_handler(struct restund_msgctx *ctx, int proto, void *sock,
 	if (al && al->username && ctx->key) {
 
 		struct stun_attr *usr = stun_msg_attr(msg, STUN_ATTR_USERNAME);
+		char *uname = usr ? usr->v.username : NULL;
 
-		if (!usr || strcmp(usr->v.username, al->username)) {
-			restund_debug("turn: wrong credetials\n");
+		if (!usr || strcmp(uname, al->username)) {
+			restund_debug("turn: wrong credentials\n");
 			++turnd.reply.scode_441;
 			err = stun_ereply(proto, sock, src, 0, msg,
 					  441, "Wrong Credentials",
@@ -156,7 +157,7 @@ static bool indication_handler(struct restund_msgctx *ctx, int proto,
 {
 	struct stun_attr *data, *peer;
 	struct allocation *al;
-	struct perm *perm;
+	struct perm *perm = NULL;
 	const struct sa *psa;
 	int err;
 	(void)sock;
@@ -179,25 +180,31 @@ static bool indication_handler(struct restund_msgctx *ctx, int proto,
 		return true;
 
 	psa = &peer->v.xor_peer_addr;
-	perm = perm_find(al->perms, psa);
-	if (!perm) {
-		++al->dropc_tx;
-		return true;
+	if (!al->relaxed) {
+		perm = perm_find(al->perms, psa);
+		if (!perm) {
+			++al->dropc_tx;
+			return true;
+		}
 	}
 
-	if (restund_addr_is_blocked(psa))
+	if (restund_addr_is_blocked(psa)) {
 		err = EPERM;
-	else
-		err = udp_send(al->rel_us, psa, &data->v.data);
+		goto out;
+	}
+
+	err = udp_send(al->rel_us, psa, &data->v.data);
 	if (err)
 		turnd.errc_tx++;
 	else {
 		const size_t bytes = mbuf_get_left(&data->v.data);
 
-		perm_tx_stat(perm, bytes);
+		if (perm)
+			perm_tx_stat(perm, bytes);
 		turnd.bytec_tx += bytes;
 	}
 
+ out:
 	return true;
 }
 
