@@ -78,7 +78,7 @@ static void timeout(void *arg)
 static void udp_recv(const struct sa *src, struct mbuf *mb, void *arg)
 {
 	struct allocation *al = arg;
-	struct perm *perm;
+	struct perm *perm = NULL;
 	struct chan *chan;
 	int err;
 
@@ -145,7 +145,9 @@ static void udp_recv(const struct sa *src, struct mbuf *mb, void *arg)
 	else {
 		const size_t bytes = mbuf_get_left(mb);
 
-		perm_rx_stat(perm, bytes);
+		if (perm)
+			perm_rx_stat(perm, bytes);
+
 		turndp()->bytec_rx += bytes;
 	}
 }
