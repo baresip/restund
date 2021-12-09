@@ -89,7 +89,7 @@ OBJS	+= $(patsubst %.c,$(BUILD)/src/%.o,$(SRCS))
 
 ifneq ($(STATIC),)
 LIBS      += $(MOD_LFLAGS)
-#include mk/static.mk
+include mk/static.mk
 endif
 
 
@@ -103,7 +103,7 @@ $(BIN): $(OBJS)
 ifneq ($(GPROF),)
 	@$(LD) $(LFLAGS) $(APP_LFLAGS) $^ ../re/libre.a $(LIBS) -o $@
 else
-	@$(LD) $(LFLAGS) $(APP_LFLAGS) $^ -o $@ kontrib/re/libre.a $(LIBS)
+	@$(LD) $(LFLAGS) $(APP_LFLAGS) $^ -L$(LIBRE_SO) -lre $(LIBS) -o $@
 endif
 
 $(BUILD)/%.o: %.c $(BUILD) Makefile $(APP_MK)
@@ -129,6 +129,3 @@ config:
 	@mkdir -p $(DESTDIR)/etc
 	$(INSTALL) -m 0644 etc/restund.conf $(DESTDIR)/etc/.
 	$(INSTALL) -m 0644 etc/restund.auth $(DESTDIR)/etc/.
-
-info:
-	echo "MOD_MK=$(MOD_MK)"
