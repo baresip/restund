@@ -195,7 +195,7 @@ static void http_req_handler(struct http_conn *conn,
 		    " \"password\" : \"%b\",\r\n"
 		    " \"ttl\" : %u,\r\n"
 		    " \"uris\" : [\r\n"
-		    "   \"turn:%J?transport=udp\",\r\n"
+		    "   \"turn:%J?transport=udp\"\r\n"
 		    "   ]\r\n"
 		    "}\r\n"
 		    ,
