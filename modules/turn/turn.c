@@ -346,6 +346,7 @@ static int module_init(void)
 {
 	uint32_t x, bsize = ALLOC_DEFAULT_BSIZE;
 	struct pl opt;
+	struct pl addr;
 	int err = 0;
 
 	restund_stun_register_handler(&stun);
@@ -413,6 +414,22 @@ static int module_init(void)
 		goto out;
 	}
 
+	if (!conf_get(restund_conf(), "federate_listen", &opt)) {
+		uint32_t fport;
+
+		if (!conf_get_u32(restund_conf(), "federate_port", &fport)) {
+			turnd.federate.enabled = true;
+			sa_set(&turnd.federate.sa, &opt, fport);
+			restund_debug("turn: using federation on %J\n",
+				      &turnd.federate.sa);
+		}
+	}
+
+	if (turnd.federate.enabled) {
+		federate_init();
+	}
+
+	
 	restund_debug("turn: lifetime=%u ext=%j ext6=%j bsz=%u\n",
 		      turnd.lifetime_max, &turnd.rel_addr, &turnd.rel_addr6,
 		      bsize);

@@ -250,6 +250,9 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 	bool public = false;
 	char *uname;
 
+	restund_debug("turn: allocate_request: alx=%p src=%J dst=%J\n",
+		      alx, src, dst);
+	
 	/* Existing allocation */
 	if (alx) {
 		if (!memcmp(alx->tid, stun_msg_tid(msg), sizeof(alx->tid)) &&

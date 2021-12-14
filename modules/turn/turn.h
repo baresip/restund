@@ -29,6 +29,13 @@ struct turnd {
 		uint64_t scode_500;
 		uint64_t scode_508;
 	} reply;
+
+	struct {
+		bool enabled;
+		struct sa sa;
+		struct tls *dtls;
+		struct list tconnl;
+	} federate;
 };
 
 struct chanlist;
@@ -94,3 +101,9 @@ uint16_t chan_numb(const struct chan *chan);
 const struct sa *chan_peer(const struct chan *chan);
 int  chanlist_alloc(struct chanlist **clp, uint32_t bsize);
 void chan_status(const struct chanlist *cl, struct mbuf *mb);
+
+int federate_init(struct tls **dtlsp);
+
+int cert_tls_set_selfsigned_ecdsa(struct tls *tls, const char *curve_name);
+int cert_enable_ecdh(struct tls *tls);
+

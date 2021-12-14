@@ -6,7 +6,9 @@
 
 MOD		:= turn
 $(MOD)_SRCS	+= alloc.c
+$(MOD)_SRCS	+= cert.c
 $(MOD)_SRCS	+= chan.c
+$(MOD)_SRCS	+= federate.c
 $(MOD)_SRCS	+= perm.c
 $(MOD)_SRCS	+= turn.c
 $(MOD)_LFLAGS	+=
