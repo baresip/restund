@@ -155,8 +155,9 @@ static bool indication_handler(struct restund_msgctx *ctx, int proto,
 			       const struct sa *dst,
 			       const struct stun_msg *msg)
 {
-	struct stun_attr *data, *peer;
+	struct stun_attr *data, *peer, cid;
 	struct allocation *al;
+	struct federate *fed;
 	struct perm *perm = NULL;
 	const struct sa *psa;
 	int err;
@@ -193,7 +194,11 @@ static bool indication_handler(struct restund_msgctx *ctx, int proto,
 		goto out;
 	}
 
-	err = udp_send(al->rel_us, psa, &data->v.data);
+	fed = turnd.federate;
+	if (fed)
+		err = federate_send(fed, psa, &data->v.data);
+	else
+		err = udp_send(al->rel_us, psa, &data->v.data);
 	if (err)
 		turnd.errc_tx++;
 	else {
@@ -416,19 +421,30 @@ static int module_init(void)
 
 	if (!conf_get(restund_conf(), "federate_listen", &opt)) {
 		uint32_t fport;
+		struct sa fsa;
 
 		if (!conf_get_u32(restund_conf(), "federate_port", &fport)) {
-			turnd.federate.enabled = true;
-			sa_set(&turnd.federate.sa, &opt, fport);
-			restund_debug("turn: using federation on %J\n",
-				      &turnd.federate.sa);
+			char *fed_type;
+			
+			sa_set(&fsa, &opt, fport);
+
+			if (!conf_get(restund_conf(), "federate_type", &opt)) {
+				pl_strdup(&fed_type, &opt);
+			}
+			else {
+				fed_type = "udp";
+			}
+			
+			restund_debug("turn: using %s-federation on: %J\n",
+				      fed_type, &fsa);
+			err = federate_alloc(&turnd.federate, &fsa, fed_type);
+			if (err) {
+				restund_warning("turn: failed to federate "
+						"on: %J err=%m\n",
+						&fsa, err);
+			}
 		}
 	}
-
-	if (turnd.federate.enabled) {
-		federate_init();
-	}
-
 	
 	restund_debug("turn: lifetime=%u ext=%j ext6=%j bsz=%u\n",
 		      turnd.lifetime_max, &turnd.rel_addr, &turnd.rel_addr6,
@@ -437,7 +453,6 @@ static int module_init(void)
  out:
 	return err;
 }
-
 
 static int module_close(void)
 {

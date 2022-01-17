@@ -63,6 +63,9 @@ static void destructor(void *arg)
 	mem_deref(al->rel_us);
 	mem_deref(al->rsv_us);
 	turndp()->allocc_cur--;
+
+	if (al->cid)
+		federate_del_conn(turndp()->federate, al->cid);
 }
 
 
@@ -75,43 +78,24 @@ static void timeout(void *arg)
 }
 
 
-static void udp_recv(const struct sa *src, struct mbuf *mb, void *arg)
+int allocate_recv(struct allocation *al, struct mbuf *mb,
+		  struct chan *chan, struct perm *perm,
+		  const struct sa *src)
 {
-	struct allocation *al = arg;
-	struct perm *perm = NULL;
-	struct chan *chan;
 	int err;
 
-	if (al->proto == IPPROTO_TCP) {
-
-		if (tcp_conn_txqsz(al->cli_sock) > TCP_MAX_TXQSZ) {
-			++al->dropc_rx;
-			return;
-		}
-	}
-
-	if (!al->relaxed) {
-		perm = perm_find(al->perms, src);
-		if (!perm) {
-			++al->dropc_rx;
-			return;
-		}
-	}
-
-	chan = chan_peer_find(al->chans, src);
-	if (!chan && al->relaxed) {
-		restund_debug("udp_recv: relaxed mode: creating for: %J\n",
-			      src);
-		chan = chan_create(al->chans, 9999, src, al);
-	}
-	if (chan) {
+	if (chan || al->relaxed) {
 		uint16_t len = mbuf_get_left(mb);
 		size_t start;
 
 		mb->pos -= 4;
 		start = mb->pos;
 
-		(void)mbuf_write_u16(mb, htons(chan_numb(chan)));
+		if (chan)
+			(void)mbuf_write_u16(mb, htons(chan_numb(chan)));
+		else
+			(void)mbuf_write_u16(mb, 0xffff);
+			
 		(void)mbuf_write_u16(mb, htons(len));
 
 		if (al->proto == IPPROTO_TCP) {
@@ -132,6 +116,10 @@ static void udp_recv(const struct sa *src, struct mbuf *mb, void *arg)
 		mb->pos += 4;
 	}
 	else {
+		if (!src) {
+			err = EINVAL;
+			goto out;
+		}
 		err = stun_indication(al->proto, al->cli_sock,
 				      &al->cli_addr, 0, STUN_METHOD_DATA,
 				      NULL, 0, false, 2,
@@ -150,8 +138,36 @@ static void udp_recv(const struct sa *src, struct mbuf *mb, void *arg)
 
 		turndp()->bytec_rx += bytes;
 	}
+
+	return err;
 }
 
+
+static void udp_recv(const struct sa *src, struct mbuf *mb, void *arg)
+{
+	struct allocation *al = arg;
+	struct chan *chan = NULL;
+	struct perm *perm = NULL;
+	
+	if (al->proto == IPPROTO_TCP) {
+
+		if (tcp_conn_txqsz(al->cli_sock) > TCP_MAX_TXQSZ) {
+			++al->dropc_rx;
+			return;
+		}
+	}
+
+	if (!al->relaxed) {
+		perm = perm_find(al->perms, src);
+		if (!perm) {
+			++al->dropc_rx;
+			return;
+		}
+		chan = chan_peer_find(al->chans, src);
+	}
+
+	allocate_recv(al, mb, chan, perm, src);
+}
 
 static int relay_listen(const struct sa *rel_addr, struct allocation *al,
 			const struct stun_even_port *even)
@@ -243,16 +259,17 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 	struct allocation *al = NULL;
 	const struct sa *rel_addr;
 	struct sa public_addr;
+	struct federate *fed = NULL;
 	uint32_t lifetime;
 	int err = 0, rerr;
 	uint64_t rsv;
 	uint8_t af;
 	bool public = false;
 	char *uname;
-
+	
 	restund_debug("turn: allocate_request: alx=%p src=%J dst=%J\n",
 		      alx, src, dst);
-	
+
 	/* Existing allocation */
 	if (alx) {
 		if (!memcmp(alx->tid, stun_msg_tid(msg), sizeof(alx->tid)) &&
@@ -363,7 +380,14 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 		uname = attr->v.username;
 		if (strstr(uname, SFT_TOKEN) == uname) {
 			al->relaxed = true;
-			//uname += str_len(SFT_TOKEN);
+
+			fed = turndp()->federate;
+			if (fed) {
+				al->cid = federate_add_conn(fed, al);
+				restund_debug("alloc(%p): cid=%u\n",
+					      al, al->cid);
+				//uname += str_len(SFT_TOKEN);
+			}
 		}
 	}
 	if (uname)
@@ -448,14 +472,29 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 			     &alx->rel_addr, &public_addr);
 	}
 
-	err = rerr = stun_reply(proto, sock, src, 0, msg,
-				ctx->key, ctx->keylen, ctx->fp, 5,
-				STUN_ATTR_XOR_RELAY_ADDR,
-				public ? &public_addr : &alx->rel_addr,
-				STUN_ATTR_LIFETIME, &lifetime,
-				STUN_ATTR_RSV_TOKEN, alx->rsv_us ? &rsv : NULL,
-				STUN_ATTR_XOR_MAPPED_ADDR, src,
-				STUN_ATTR_SOFTWARE, restund_software);
+	if (fed && alx->cid) {
+		rerr = stun_reply(proto, sock, src, 0, msg,
+				  ctx->key, ctx->keylen, ctx->fp, 6,
+				  STUN_ATTR_XOR_RELAY_ADDR,
+				  federate_local_addr(fed),
+				  STUN_ATTR_LIFETIME, &lifetime,
+				  STUN_ATTR_RSV_TOKEN,
+				  alx->rsv_us ? &rsv : NULL,
+				  STUN_ATTR_XOR_MAPPED_ADDR, src,
+				  STUN_ATTR_CHANNEL_NUMBER, &alx->cid,
+				  STUN_ATTR_SOFTWARE, restund_software);
+	}
+	else {
+		rerr = stun_reply(proto, sock, src, 0, msg,
+				  ctx->key, ctx->keylen, ctx->fp, 5,
+				  STUN_ATTR_XOR_RELAY_ADDR,
+				  public ? &public_addr : &alx->rel_addr,
+				  STUN_ATTR_LIFETIME, &lifetime,
+				  STUN_ATTR_RSV_TOKEN, alx->rsv_us?&rsv : NULL,
+				  STUN_ATTR_XOR_MAPPED_ADDR, src,
+				  STUN_ATTR_SOFTWARE, restund_software);
+	}
+	err = rerr;
  out:
 	if (rerr)
 		restund_warning("turn: allocate reply: %m\n", rerr);

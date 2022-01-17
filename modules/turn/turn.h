@@ -30,12 +30,7 @@ struct turnd {
 		uint64_t scode_508;
 	} reply;
 
-	struct {
-		bool enabled;
-		struct sa sa;
-		struct tls *dtls;
-		struct list tconnl;
-	} federate;
+	struct federate *federate;
 };
 
 struct chanlist;
@@ -59,12 +54,20 @@ struct allocation {
 	int proto;
 
 	bool relaxed;
+	uint16_t cid;
 };
+
+struct perm;
+struct chan;
+
 
 void allocate_request(struct turnd *turnd, struct allocation *alx,
 		      struct restund_msgctx *ctx, int proto, void *sock,
 		      const struct sa *src, const struct sa *dst,
 		      const struct stun_msg *msg);
+int allocate_recv(struct allocation *al, struct mbuf *mb,
+		  struct chan *chan, struct perm *perm,
+		  const struct sa *src);
 void refresh_request(struct turnd *turnd, struct allocation *al,
 		     struct restund_msgctx *ctx,
 		     int proto, void *sock, const struct sa *src,
@@ -78,7 +81,6 @@ void chanbind_request(struct allocation *al, struct restund_msgctx *ctx,
 struct turnd *turndp(void);
 
 
-struct perm;
 
 struct perm *perm_find(const struct hash *ht, const struct sa *addr);
 struct perm *perm_create(struct hash *ht, const struct sa *peer,
@@ -90,8 +92,6 @@ int  perm_hash_alloc(struct hash **ht, uint32_t bsize);
 void perm_status(struct hash *ht, struct mbuf *mb);
 
 
-struct chan;
-
 struct chan *chan_numb_find(const struct chanlist *cl, uint16_t numb);
 struct chan *chan_peer_find(const struct chanlist *cl, const struct sa *peer);
 struct chan *chan_create(struct chanlist *cl, uint16_t numb,
@@ -102,8 +102,16 @@ const struct sa *chan_peer(const struct chan *chan);
 int  chanlist_alloc(struct chanlist **clp, uint32_t bsize);
 void chan_status(const struct chanlist *cl, struct mbuf *mb);
 
-int federate_init(struct tls **dtlsp);
 
 int cert_tls_set_selfsigned_ecdsa(struct tls *tls, const char *curve_name);
 int cert_enable_ecdh(struct tls *tls);
+
+int federate_alloc(struct federate **fedp, struct sa *local_addr,
+		   const char *type);
+struct sa *federate_local_addr(struct federate *fed);
+int federate_send(struct federate *fed, const struct sa *dst, struct mbuf *mb);
+uint16_t federate_add_conn(struct federate *fed, struct allocation *alx);
+int federate_del_conn(struct federate *fed, uint16_t cid);
+
+
 

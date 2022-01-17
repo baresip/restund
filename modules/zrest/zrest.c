@@ -247,8 +247,12 @@ static int module_init(void)
 			      addr, sizeof(addr))) {
 
 		struct sa http_addr;
+		uint32_t hport;
 
-		err = sa_set_str(&http_addr, addr, 8000);
+		if (conf_get_u32(restund_conf(), "zrest_port", &hport))
+			hport = 8000;
+
+		err = sa_set_str(&http_addr, addr, hport);
 		if (err) {
 			restund_warning("zrest: invalid address (%s)\n", addr);
 			return err;
