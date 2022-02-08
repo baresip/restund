@@ -458,6 +458,7 @@ static int module_close(void)
 {
 	hash_flush(turnd.ht_alloc);
 	turnd.ht_alloc = mem_deref(turnd.ht_alloc);
+	turnd.federate = mem_deref(turnd.federate);
 	restund_cmd_unsubscribe(&cmd_turnreply);
 	restund_cmd_unsubscribe(&cmd_turnstats);
 	restund_cmd_unsubscribe(&cmd_turn);
