@@ -9,12 +9,15 @@
 
 #define	LAYER_DTLS 20       /* must be above zero */
 
+#define TIMEOUT_CONN   2000
+
 struct tconn {
 	struct federate *fed;
 	struct tls_conn *tc;
 	struct sa peer;
 	bool estab;
 
+	struct tmr tmr_conn;
 	struct list sendl; /* send_entry of packets to send upon connection */
 	struct le le; /* member of federate connl */
 };
@@ -63,6 +66,8 @@ static void dtls_estab_handler(void *arg)
 
 	tconn->estab = true;
 	le = tconn->sendl.head;
+	
+	mem_ref(tconn);
 	while(le) {
 		struct send_entry *se = le->data;
 
@@ -71,6 +76,7 @@ static void dtls_estab_handler(void *arg)
 
 		mem_deref(se);
 	}
+	mem_deref(tconn);
 }
 
 static void dtls_recv_handler(struct mbuf *mb, void *arg)
@@ -78,9 +84,9 @@ static void dtls_recv_handler(struct mbuf *mb, void *arg)
 	struct tconn *tconn = arg;
 	struct federate *fed = tconn ? tconn->fed : NULL;
 
-	restund_debug("federate_dtls(%p): dtls_recv_handler: on tconn=%p "
-		      "nbytes=%zu\n",
-		      fed, tconn, mbuf_get_left(mb));
+	restund_info("federate_dtls(%p): dtls_recv_handler: on tconn=%p "
+		     "nbytes=%zu\n",
+		     fed, tconn, mbuf_get_left(mb));
 
 	if (!fed)
 		return;
@@ -93,9 +99,9 @@ static void dtls_close_handler(int err, void *arg)
 	struct tconn *tconn = arg;
 	struct federate *fed = tconn ? tconn->fed : NULL;
 
-	restund_debug("federate_dtls(%p): dtls_close_handler: on tconn=%p "
-		      "err=%m\n",
-		      fed, tconn, err);
+	restund_info("federate_dtls(%p): dtls_close_handler: on tconn=%p "
+		     "err=%m\n",
+		     fed, tconn, err);
 
 	mem_deref(tconn);
 }
@@ -131,8 +137,8 @@ static void dtls_conn_handler(const struct sa *peer, void *arg)
 	struct tconn *tconn = NULL;
 	int err;
 
-	restund_debug("federate_dtls(%p): incoming DTLS connect peer=%J\n",
-		      fed, peer);
+	restund_info("federate_dtls(%p): incoming DTLS connect peer=%J\n",
+		     fed, peer);
 
 	tconn = alloc_tconn(fed, peer);
 	if (!tconn) {
@@ -153,8 +159,8 @@ static void dtls_conn_handler(const struct sa *peer, void *arg)
 		goto out;
 	}
 	
-	restund_debug("federate_tls(%p): dtls accepted tls_conn=%p\n",
-		      fed, tconn->tc);
+	restund_info("federate_tls(%p): dtls accepted tls_conn=%p\n",
+		     fed, tconn->tc);
 
  out:
 	if (err)
@@ -172,7 +178,7 @@ int federate_dtls_init(struct federate *fed, struct sa *lsa)
 	
 	err = tls_alloc(&fed->dtls.tls, TLS_METHOD_DTLS, NULL, NULL);
 	if (err) {
-		restund_debug("reflow: failed to create DTLS context (%m)\n",
+		restund_info("reflow: failed to create DTLS context (%m)\n",
 			err);
 		goto out;
 	}
@@ -181,18 +187,18 @@ int federate_dtls_init(struct federate *fed, struct sa *lsa)
 	if (err)
 		goto out;
 
-	restund_debug("turn: setting %zu ciphers for DTLS\n",
+	restund_info("turn: setting %zu ciphers for DTLS\n",
 		      ARRAY_SIZE(cipherv));
 	err = tls_set_ciphers(fed->dtls.tls, cipherv, ARRAY_SIZE(cipherv));
 	if (err)
 		goto out;
 
-	restund_debug("turn: generating ECDSA certificate\n");
+	restund_info("turn: generating ECDSA certificate\n");
 	err = cert_tls_set_selfsigned_ecdsa(fed->dtls.tls, "prime256v1");
 	if (err) {
-		restund_debug("federate_dtls: failed to generate ECDSA"
-			      " certificate"
-			      " (%m)\n", err);
+		restund_info("federate_dtls: failed to generate ECDSA"
+			     " certificate"
+			     " (%m)\n", err);
 		goto out;
 	}
 
@@ -203,7 +209,7 @@ int federate_dtls_init(struct federate *fed, struct sa *lsa)
 			   "SRTP_AEAD_AES_128_GCM:"
 			   "SRTP_AES128_CM_SHA1_80");
 	if (err) {
-		restund_debug("turn: failed to enable SRTP profile (%m)\n",
+		restund_info("turn: failed to enable SRTP profile (%m)\n",
 			      err);
 		goto out;
 	}
@@ -253,6 +259,15 @@ static void se_destructor(void *arg)
 	mem_deref(se->mb);	
 }
 
+static void conn_timeout_handler(void *arg)
+{
+	struct tconn *tconn = arg;
+
+	restund_warning("tconn(%p): timeout\n", tconn);
+
+	mem_deref(tconn);
+}
+
 int federate_dtls_send(struct federate *fed, const struct sa *dst,
 		       struct mbuf *mb)
 {
@@ -262,11 +277,11 @@ int federate_dtls_send(struct federate *fed, const struct sa *dst,
 	if (!fed && fed->type != FED_TYPE_DTLS)
 		return EINVAL;
 
-	restund_debug("federate_dtls_send(%p): send to: %J\n", fed, dst);
+	restund_info("federate_dtls_send(%p): send to: %J\n", fed, dst);
 	
 	tconn = lookup_tconn(fed, dst);
 	if (tconn && tconn->estab) {
-		restund_debug("federate_dtls_send(%p): direct send\n", fed);
+		restund_info("federate_dtls_send(%p): direct send\n", fed);
 		err = dtls_send(tconn->tc, mb);
 		goto out;
 	}
@@ -275,7 +290,7 @@ int federate_dtls_send(struct federate *fed, const struct sa *dst,
 		if (!tconn)
 			return ENOMEM;
 
-		restund_debug("federate_dtls_send(%p): allocating tconn: %p "
+		restund_info("federate_dtls_send(%p): allocating tconn: %p "
 			      "dst=%J\n",
 			      fed, tconn, dst);
 		
@@ -291,6 +306,8 @@ int federate_dtls_send(struct federate *fed, const struct sa *dst,
 					fed, err);
 			goto out;
 		}
+		tmr_start(&tconn->tmr_conn, TIMEOUT_CONN,
+			  conn_timeout_handler, tconn);
 	}		
 	if (tconn) {
 		struct send_entry *se;
@@ -309,7 +326,7 @@ int federate_dtls_send(struct federate *fed, const struct sa *dst,
 		se->mb->pos = mb->pos;
 		se->mb->end = mb->end;
 
-		restund_debug("federate_dtls_send(%p): queueing packet of size: %zu\n", fed, mbuf_get_left(mb));
+		restund_info("federate_dtls_send(%p): queueing packet of size: %zu\n", fed, mbuf_get_left(mb));
 		list_append(&tconn->sendl, &se->le, se);
 
 		return 0;
