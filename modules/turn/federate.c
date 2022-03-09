@@ -89,7 +89,7 @@ int federate_del_conn(struct federate *fed, uint16_t cid)
 	if (!fed)
 		return EINVAL;
 
-	fconn = lookup_fconn(fed, fconn->cid);
+	fconn = lookup_fconn(fed, cid);
 	if (fconn)
 		mem_deref(fconn);
 
