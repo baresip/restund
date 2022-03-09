@@ -64,6 +64,8 @@ static void dtls_estab_handler(void *arg)
 	restund_info("federate_dtls(%p): tconn=%p established with: %J\n",
 		     fed, tconn, &tconn->peer);
 
+	tmr_cancel(&tconn->tmr_conn);
+	
 	tconn->estab = true;
 	le = tconn->sendl.head;
 	
@@ -111,6 +113,7 @@ static void tconn_destructor(void *arg)
 {
 	struct tconn *tconn = arg;
 
+	tmr_cancel(&tconn->tmr_conn);
 	list_unlink(&tconn->le);
 
 	list_flush(&tconn->sendl);
