@@ -114,6 +114,7 @@ static void tconn_destructor(void *arg)
 	struct tconn *tconn = arg;
 
 	tmr_cancel(&tconn->tmr_conn);
+	tconn->tc = mem_deref(tconn->tc);
 	list_unlink(&tconn->le);
 
 	list_flush(&tconn->sendl);
