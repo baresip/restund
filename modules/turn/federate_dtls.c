@@ -11,6 +11,8 @@
 
 #define TIMEOUT_CONN   2000
 
+#undef PACKET_DEBUG
+
 struct tconn {
 	struct federate *fed;
 	struct tls_conn *tc;
@@ -86,10 +88,12 @@ static void dtls_recv_handler(struct mbuf *mb, void *arg)
 	struct tconn *tconn = arg;
 	struct federate *fed = tconn ? tconn->fed : NULL;
 
+#ifdef PACKET_DEBUG
 	restund_info("federate_dtls(%p): dtls_recv_handler: on tconn=%p "
 		     "nbytes=%zu\n",
 		     fed, tconn, mbuf_get_left(mb));
-
+#endif
+	
 	if (!fed)
 		return;
 
@@ -163,8 +167,8 @@ static void dtls_conn_handler(const struct sa *peer, void *arg)
 		goto out;
 	}
 	
-	restund_info("federate_tls(%p): dtls accepted tls_conn=%p\n",
-		     fed, tconn->tc);
+	restund_debug("federate_tls(%p): dtls accepted tls_conn=%p\n",
+		      fed, tconn->tc);
 
  out:
 	if (err)
@@ -281,11 +285,13 @@ int federate_dtls_send(struct federate *fed, const struct sa *dst,
 	if (!fed && fed->type != FED_TYPE_DTLS)
 		return EINVAL;
 
-	restund_info("federate_dtls_send(%p): send to: %J\n", fed, dst);
-	
 	tconn = lookup_tconn(fed, dst);
+	
 	if (tconn && tconn->estab) {
-		restund_info("federate_dtls_send(%p): direct send\n", fed);
+#ifdef PACKET_DEBUG
+		restund_info("federate_dtls_send(%p): direct send: %J\n",
+			     fed, dst);
+#endif
 		err = dtls_send(tconn->tc, mb);
 		goto out;
 	}
@@ -294,10 +300,6 @@ int federate_dtls_send(struct federate *fed, const struct sa *dst,
 		if (!tconn)
 			return ENOMEM;
 
-		restund_info("federate_dtls_send(%p): allocating tconn: %p "
-			      "dst=%J\n",
-			      fed, tconn, dst);
-		
 		err = dtls_connect(&tconn->tc, fed->dtls.tls,
 				   fed->dtls.sock, dst,
 				   dtls_estab_handler,
@@ -330,7 +332,12 @@ int federate_dtls_send(struct federate *fed, const struct sa *dst,
 		se->mb->pos = mb->pos;
 		se->mb->end = mb->end;
 
-		restund_info("federate_dtls_send(%p): queueing packet of size: %zu\n", fed, mbuf_get_left(mb));
+#ifdef PACKET_DEBUG
+		restund_info("federate_dtls_send(%p): "
+			     "queueing packet of size: %zu to: %J\n",
+			     fed, mbuf_get_left(mb), dst);
+#endif
+
 		list_append(&tconn->sendl, &se->le, se);
 
 		return 0;
