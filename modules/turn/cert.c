@@ -179,3 +179,35 @@ int cert_enable_ecdh(struct tls *tls)
 
 	return 0;
 }
+
+static int verify_handler(int ok, X509_STORE_CTX *xtx)
+{
+	restund_info("cert: verify_handler: ok=%d\n", ok);
+
+	return ok;
+}
+
+
+int cert_setup_file(struct tls *tls, int depth, bool isclient)
+{
+	SSL_CTX *ctx;
+
+	if (!tls)
+		return EINVAL;
+
+	ctx = tls_openssl_context(tls);
+	if (!ctx) {
+		restund_warning("cert: no openssl context\n");
+		return ENOENT;
+	}
+
+	SSL_CTX_set_verify(ctx,
+			   //SSL_VERIFY_NONE,
+			   SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
+			   verify_handler);
+		
+	
+	//SSL_CTX_set_verify_depth(ctx, depth);
+
+	return 0;
+}

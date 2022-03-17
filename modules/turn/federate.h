@@ -19,9 +19,13 @@ struct federate {
 		struct udp_sock *sock;
 	} udp;
 	struct {
-		struct tls *tls;
 		struct dtls_sock *sock;
 		struct list connl;
+
+		char *certfile;
+		char *passwd;
+		char *cafile;
+		int depth;
 	} dtls;
 	
 	struct sa lsa; /* local address */
@@ -41,7 +45,6 @@ struct fed_conn {
 };
 
 void federate_recv(struct federate *fed, struct mbuf *mb);
-void federate_close(struct federate *fed, int err);
 
 /* UDP */
 int  federate_udp_init(struct federate *fed, struct sa *lsa);

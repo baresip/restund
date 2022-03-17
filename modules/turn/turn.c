@@ -9,7 +9,6 @@
 #include <restund.h>
 #include "turn.h"
 
-
 enum {
 	ALLOC_DEFAULT_BSIZE = 512,
 };
@@ -424,7 +423,7 @@ static int module_init(void)
 		struct sa fsa;
 
 		if (!conf_get_u32(restund_conf(), "federate_port", &fport)) {
-			char *fed_type;
+			char *fed_type = NULL;
 			
 			sa_set(&fsa, &opt, fport);
 
@@ -432,12 +431,13 @@ static int module_init(void)
 				pl_strdup(&fed_type, &opt);
 			}
 			else {
-				fed_type = "udp";
+				str_dup(&fed_type, "udp");
 			}
 			
 			restund_debug("turn: using %s-federation on: %J\n",
 				      fed_type, &fsa);
 			err = federate_alloc(&turnd.federate, &fsa, fed_type);
+			mem_deref(fed_type);
 			if (err) {
 				restund_warning("turn: failed to federate "
 						"on: %J err=%m\n",
@@ -458,7 +458,9 @@ static int module_close(void)
 {
 	hash_flush(turnd.ht_alloc);
 	turnd.ht_alloc = mem_deref(turnd.ht_alloc);
-	turnd.federate = mem_deref(turnd.federate);
+	if (turnd.federate)
+		federate_close(turnd.federate, 0);
+
 	restund_cmd_unsubscribe(&cmd_turnreply);
 	restund_cmd_unsubscribe(&cmd_turnstats);
 	restund_cmd_unsubscribe(&cmd_turn);

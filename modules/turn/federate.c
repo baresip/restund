@@ -209,8 +209,10 @@ void federate_close(struct federate *fed, int err)
 {
 	restund_debug("federate_close(%p): err=%d\n", fed, err);
 
-	if (fed->closeh)
+	if (fed->closeh) {
 		fed->closeh(fed, err);
+		fed->closeh = NULL;
+	}
 
 	mem_deref(fed);
 }

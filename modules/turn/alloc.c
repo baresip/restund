@@ -111,7 +111,6 @@ int allocate_recv(struct allocation *al, struct mbuf *mb,
 		}
 
 		mb->pos = start;
-		restund_debug("restund: stun_send to: %J\n", &al->cli_addr);
 		err = stun_send(al->proto, al->cli_sock, &al->cli_addr, mb);
 		mb->pos += 4;
 	}

@@ -105,9 +105,11 @@ void chan_status(const struct chanlist *cl, struct mbuf *mb);
 
 int cert_tls_set_selfsigned_ecdsa(struct tls *tls, const char *curve_name);
 int cert_enable_ecdh(struct tls *tls);
+int cert_setup_file(struct tls *tls, int depth, bool isclient);
 
 int federate_alloc(struct federate **fedp, struct sa *local_addr,
 		   const char *type);
+void federate_close(struct federate *fed, int err);
 struct sa *federate_local_addr(struct federate *fed);
 int federate_send(struct federate *fed, const struct sa *dst, struct mbuf *mb);
 uint16_t federate_add_conn(struct federate *fed, struct allocation *alx);
