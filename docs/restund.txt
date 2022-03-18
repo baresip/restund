@@ -352,7 +352,39 @@
    This username/password is valid for 1 hour and can then be passed
    to the TURN Client.
 
+3.9.  Federation
 
+   The TURN module can be used to federate between domains either:
+   - using SFT username and forwarding of STUN Data indications 
+   - using DTLS muxing for very restricitve firewall scenarios
+
+   3.9.1. SFT username forwarding
+
+     If an allocation is made using a special username that is recognized
+     as an SFT the TURN server will allow a relaxed approach to
+     receiving packets. Meaning it will not require a permission to receive
+     packets on the allocation tuple. This allows for other domains to reach
+     the allocation's tuple in order to allow for cross-domain federation.
+
+   3.9.2. DTLS muxing
+
+     In order to enable DTLS muxing for federation between domains the
+     restund configuration should contain the following configuration keys:
+
+       federate_listen <ip-address for DTLS federation requests>
+       federate_port <port for DTLS federation requests>
+       federate_type dtls (currently only supported is DTLS)
+
+       If authentication using certificates is required then the
+       following needs to be configured. If none of these are set
+       DTLS will fall back to self-signed certificates.
+
+         federate_certfile <path-to pem containing cert AND private key>
+	 federate_cafile <path-to pem for CA certs>
+
+     NOTE:
+       Even for DTLS muxing the SFT username is required to enable the muxing
+       on an allocation.
 
 
 4.  References
