@@ -105,25 +105,15 @@ void restund_stun_unregister_handler(struct restund_stun *stun)
 	list_unlink(&stun->le);
 }
 
-static inline bool is_loopback(const struct sa *sa)
-{
-        if (!sa)
-                return false;
-        switch (sa_af(sa)) {
-        case AF_INET:
-                return (ntohl(sa->u.in.sin_addr.s_addr) & 0xffffff00) == 0x7f000000;
-        default:
-                return sa_is_loopback(sa);
-        }
-}
 
 static inline bool is_broadcast(const struct sa *sa)
 {
        return ntohl(sa->u.in.sin_addr.s_addr) == 0xffffffff;
 }
 
+
 bool restund_addr_is_blocked(const struct sa *sa)
 {
-       return is_loopback(sa) || is_broadcast(sa)
+       return sa_is_loopback(sa) || is_broadcast(sa)
                || sa_is_any(sa) || sa_is_linklocal(sa);
 }
