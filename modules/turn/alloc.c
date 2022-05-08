@@ -52,6 +52,10 @@ static void destructor(void *arg)
 {
 	struct allocation *al = arg;
 
+	mtx_lock(&turndp()->mutex);
+	list_unlink(&al->le_map);
+	mtx_unlock(&turndp()->mutex);
+
 	hash_flush(al->perms);
 	mem_deref(al->perms);
 	mem_deref(al->chans);
@@ -60,8 +64,11 @@ static void destructor(void *arg)
 	tmr_cancel(&al->tmr);
 	mem_deref(al->username);
 	mem_deref(al->cli_sock);
+
+	/* @TODO check fd deref cleanup on turn worker thread */
 	mem_deref(al->rel_us);
 	mem_deref(al->rsv_us);
+
 	turndp()->allocc_cur--;
 }
 
@@ -90,13 +97,17 @@ static void udp_recv(const struct sa *src, struct mbuf *mb, void *arg)
 		}
 	}
 
+	mtx_lock(&al->mutex);
 	perm = perm_find(al->perms, src);
+	mtx_unlock(&al->mutex);
 	if (!perm) {
 		++al->dropc_rx;
 		return;
 	}
 
+	mtx_lock(&al->mutex);
 	chan = chan_peer_find(al->chans, src);
+	mtx_unlock(&al->mutex);
 	if (chan) {
 		uint16_t len = mbuf_get_left(mb);
 		size_t start;
@@ -185,6 +196,14 @@ static int relay_listen(const struct sa *rel_addr, struct allocation *al,
 		break;
 	}
 
+	/* Release fd for new thread and re_map*/
+	udp_thread_detach(al->rel_us);
+	udp_thread_detach(al->rsv_us);
+
+	mtx_lock(&turndp()->mutex);
+	list_append(&turndp()->re_map, &al->le_map, al);
+	mtx_unlock(&turndp()->mutex);
+
 	return (i == PORT_TRY_MAX) ? EADDRINUSE : err;
 }
 
@@ -247,7 +266,7 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 			goto reply;
 		}
 
-		restund_debug("turn: allocation already exists (%J)\n", src);
+		restund_warning("turn: allocation already exists (%J)\n", src);
 		++turnd->reply.scode_437;
 		rerr = stun_ereply(proto, sock, src, 0, msg,
 				   437, "Allocation TID Mismatch",
@@ -351,6 +370,7 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 	al->cli_addr = *src;
 	al->srv_addr = *dst;
 	al->proto = proto;
+	mtx_init(&al->mutex, mtx_plain);
 	sa_init(&al->rsv_addr, AF_UNSPEC);
 	turndp()->allocc_tot++;
 	turndp()->allocc_cur++;
@@ -466,7 +486,9 @@ void refresh_request(struct turnd *turnd, struct allocation *al,
 	lifetime = lifetime ? MAX(lifetime, TURN_DEFAULT_LIFETIME) : 0;
 	lifetime = MIN(lifetime, turnd->lifetime_max);
 
+	mtx_lock(&al->mutex);
 	tmr_start(&al->tmr, lifetime * 1000, timeout, al);
+	mtx_unlock(&al->mutex);
 
 	restund_debug("turn: allocation %p refresh (%us)\n", al, lifetime);
 
