@@ -11,7 +11,8 @@
 
 
 enum {
-	ALLOC_DEFAULT_BSIZE = 512,
+	ALLOC_DEFAULT_BSIZE = 1024,
+	TURN_THREADS = 4
 };
 
 
@@ -23,7 +24,8 @@ struct tuple {
 
 
 static struct turnd turnd;
-
+static struct tmr timers[TURN_THREADS];
+static thrd_t tid[TURN_THREADS];
 
 struct turnd *turndp(void)
 {
@@ -335,6 +337,60 @@ static struct restund_cmdsub cmd_turnreply = {
 };
 
 
+static void tmr_handler(void *arg)
+{
+	struct tmr *tmr = arg;
+	struct le *le;
+
+	mtx_lock(&turndp()->mutex);
+	if (!turndp()->run)
+		re_cancel();
+
+	/* Reassign one allocation by time */
+	LIST_FOREACH(&turndp()->re_map, le)
+	{
+		struct allocation *al = le->data;
+		mtx_lock(&al->mutex);
+		udp_thread_attach(al->rel_us);
+		udp_thread_attach(al->rsv_us);
+		mtx_unlock(&al->mutex);
+	}
+	list_clear(&turndp()->re_map);
+
+	mtx_unlock(&turndp()->mutex);
+
+	tmr_start(tmr, 10, tmr_handler, tmr);
+}
+
+
+static int thread_handler(void *arg)
+{
+	struct tmr *tmr = arg;
+	int err;
+
+	err = re_thread_init();
+	if (err) {
+		restund_error("turn: re_thread_init failed %m\n", err);
+		return 0;
+	}
+
+	fd_setsize(-1);
+
+	tmr_start(tmr, 10, tmr_handler, tmr);
+
+	err = re_main(NULL);
+	if (err)
+		restund_error("turn: re_main failed %m\n", err);
+
+	tmr_cancel(tmr);
+
+	tmr_debug();
+	re_thread_close();
+
+	return 0;
+}
+
+
 static int module_init(void)
 {
 	uint32_t x, bsize = ALLOC_DEFAULT_BSIZE;
@@ -406,6 +462,24 @@ static int module_init(void)
 		goto out;
 	}
 
+	list_init(&turnd.re_map);
+
+	turnd.run = true;
+	err = mtx_init(&turnd.mutex, mtx_plain);
+	if (err) {
+		restund_error("turn: mtx_init err: %d\n", err);
+		goto out;
+	}
+
+	for (int i = 0; i < TURN_THREADS; i++) {
+		err = thrd_create(&tid[i], thread_handler,
+				   &timers[i]);
+		if (err) {
+			restund_error("turn: thrd_create err: %m\n", err);
+			goto out;
+		}
+	}
+
 	restund_debug("turn: lifetime=%u ext=%j ext6=%j bsz=%u\n",
 		      turnd.lifetime_max, &turnd.rel_addr, &turnd.rel_addr6,
 		      bsize);
@@ -417,6 +491,14 @@ static int module_init(void)
 
 static int module_close(void)
 {
+	mtx_lock(&turnd.mutex);
+	turnd.run = false;
+	mtx_unlock(&turnd.mutex);
+
+	for (int i = 0; i < TURN_THREADS; i++) {
+		thrd_join(tid[i], NULL);
+	}
+
 	hash_flush(turnd.ht_alloc);
 	turnd.ht_alloc = mem_deref(turnd.ht_alloc);
 	restund_cmd_unsubscribe(&cmd_turnreply);
