@@ -10,7 +10,6 @@
 #ifdef HAVE_GETOPT
 #include <getopt.h>
 #endif
-#include <sys/resource.h>
 #include <pthread.h>
 #include <re.h>
 #include <restund.h>
@@ -203,14 +202,7 @@ int main(int argc, char *argv[])
 
 	restund_cmd_subscribe(&cmd_reload);
 
- 	struct rlimit limits;
- 	err = getrlimit(RLIMIT_NOFILE, &limits);
- 	if (err) {
- 		restund_warning("error determining nofile rlimit: %m\n", err);
- 		goto out;
- 	}
-
- 	err = fd_setsize((int)limits.rlim_max - 42);
+	err = fd_setsize(-1);
 	if (err) {
 		restund_warning("fd_setsize error: %m\n", err);
 		goto out;
