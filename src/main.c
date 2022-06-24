@@ -202,15 +202,16 @@ int main(int argc, char *argv[])
 
 	restund_cmd_subscribe(&cmd_reload);
 
-	err = fd_setsize(-1);
-	if (err) {
-		restund_warning("fd_setsize error: %m\n", err);
-		goto out;
-	}
 
 	err = libre_init();
 	if (err) {
 		restund_error("re init failed: %m\n", err);
+		goto out;
+	}
+
+	err = fd_setsize(-1);
+	if (err) {
+		restund_warning("fd_setsize error: %m\n", err);
 		goto out;
 	}
 
@@ -284,12 +285,14 @@ int main(int argc, char *argv[])
 	restund_dtls_close();
 	conf = mem_deref(conf);
 
+	/* check for open timers */
+	tmr_debug();
+
 	libre_close();
 
 	restund_cmd_unsubscribe(&cmd_reload);
 
 	/* check for memory leaks */
-	tmr_debug();
 	mem_debug();
 
 	return err;
