@@ -27,7 +27,7 @@ struct chan {
 	struct le he_numb;
 	struct le he_peer;
 	struct sa peer;
-	const struct allocation *al;
+	struct allocation *al;
 	time_t expires;
 	uint16_t numb;
 };
@@ -50,8 +50,10 @@ static void destructor(void *arg)
 	restund_debug("turn: allocation %p channel 0x%x %J destroyed\n",
 		      chan->al, chan->numb, &chan->peer);
 
+	mtx_lock(&chan->al->mutex);
 	hash_unlink(&chan->he_numb);
 	hash_unlink(&chan->he_peer);
+	mtx_unlock(&chan->al->mutex);
 }
 
 
@@ -185,16 +187,18 @@ void chan_status(const struct chanlist *cl, struct mbuf *mb)
 
 static struct chan *chan_create(struct chanlist *cl, uint16_t numb,
 				const struct sa *peer,
-				const struct allocation *al)
+				struct allocation *al)
 {
 	struct chan *chan;
 
-	if (!cl || !peer)
+	if (!cl || !peer || !al)
 		return NULL;
 
 	chan = mem_zalloc(sizeof(*chan), destructor);
 	if (!chan)
 		return NULL;
+
+	mtx_lock(&al->mutex);
 
 	hash_append(cl->ht_numb, numb, &chan->he_numb, chan);
 	hash_append(cl->ht_peer, sa_hash(peer, SA_ALL), &chan->he_peer, chan);
@@ -203,6 +207,8 @@ static struct chan *chan_create(struct chanlist *cl, uint16_t numb,
 	chan->numb = numb;
 	chan->al = al;
 	chan->expires = time(NULL) + CHAN_LIFETIME;
+
+	mtx_unlock(&al->mutex);
 
 	restund_debug("turn: allocation %p channel 0x%x %J created\n",
 		      chan->al, chan->numb, &chan->peer);
@@ -216,7 +222,9 @@ static void chan_refresh(struct chan *chan)
 	if (!chan)
 		return;
 
+	mtx_lock(&chan->al->mutex);
 	chan->expires = time(NULL) + CHAN_LIFETIME;
+	mtx_unlock(&chan->al->mutex);
 
 	restund_debug("turn: allocation %p channel 0x%x %J refreshed\n",
 		      chan->al, chan->numb, &chan->peer);
