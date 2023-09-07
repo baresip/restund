@@ -130,6 +130,7 @@ if(NOT DEFINED MODULES)
     binding
     drain
     filedb
+    restauth
     turn
   )
 
