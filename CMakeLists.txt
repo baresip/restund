@@ -132,6 +132,7 @@ if(NOT DEFINED MODULES)
     filedb
     restauth
     stat
+    status
     turn
   )
 
