@@ -128,6 +128,7 @@ if(NOT DEFINED MODULES)
   set(MODULES
     auth
     binding
+    drain
     turn
   )
 
