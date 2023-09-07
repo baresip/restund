@@ -133,6 +133,7 @@ if(NOT DEFINED MODULES)
     restauth
     stat
     status
+    syslog
     turn
   )
 
