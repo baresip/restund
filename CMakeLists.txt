@@ -126,8 +126,9 @@ find_package(MySQL)
 
 if(NOT DEFINED MODULES)
   set(MODULES
-      auth
-      turn
+    auth
+    binding
+    turn
   )
 
   if(MySQL_FOUND)
