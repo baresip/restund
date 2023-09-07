@@ -122,11 +122,16 @@ set(SRCS
 # Modules
 #
 
+find_package(MySQL)
 
 if(NOT DEFINED MODULES)
   set(MODULES
       turn
   )
+
+  if(MySQL_FOUND)
+      list(APPEND MODULES mysql_ser)
+  endif()
 endif()
 
 foreach(mod IN LISTS MODULES)
