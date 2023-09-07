@@ -135,6 +135,7 @@ if(NOT DEFINED MODULES)
     status
     syslog
     turn
+    zrest
   )
 
   if(MySQL_FOUND)
