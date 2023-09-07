@@ -131,6 +131,7 @@ if(NOT DEFINED MODULES)
     drain
     filedb
     restauth
+    stat
     turn
   )
 
