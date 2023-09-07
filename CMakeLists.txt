@@ -119,9 +119,44 @@ set(SRCS
 
 ##############################################################################
 #
-# Target executable
+# Modules
 #
 
+
+if(NOT DEFINED MODULES)
+  set(MODULES
+      turn
+  )
+endif()
+
+foreach(mod IN LISTS MODULES)
+  add_subdirectory(modules/${mod})
+  set_target_properties(${mod} PROPERTIES PREFIX "")
+endforeach()
+
+if(STATIC)
+  foreach(mod IN LISTS MODULES)
+    set(MOD_EXPORTS
+      "${MOD_EXPORTS}extern const struct mod_export exports_${mod};\n")
+    set(MOD_EXPORT_TABLE
+      "${MOD_EXPORT_TABLE}  &exports_${mod},\n")
+  endforeach()
+
+  configure_file(src/static.c.in src/static.c)
+  list(APPEND SRCS ${CMAKE_CURRENT_BINARY_DIR}/src/static.c)
+else()
+  foreach(mod IN LISTS MODULES)
+    if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+      set_target_properties(${mod} PROPERTIES
+                            LINK_FLAGS "-undefined dynamic_lookup")
+    endif()
+  endforeach()
+endif()
+
+##############################################################################
+#
+# Target executable
+#
 
 set(LINKLIBS ${RE_LIBRARIES} Threads::Threads)
 
@@ -141,4 +176,9 @@ else()
 endif()
 
 add_executable(restund ${SRCS})
-target_link_libraries(restund PUBLIC ${LINKLIBS})
+
+if(STATIC)
+  target_link_libraries(restund PUBLIC ${LINKLIBS} ${MODULES})
+else()
+  target_link_libraries(restund PUBLIC ${LINKLIBS})
+endif()
