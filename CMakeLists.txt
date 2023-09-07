@@ -129,6 +129,7 @@ if(NOT DEFINED MODULES)
     auth
     binding
     drain
+    filedb
     turn
   )
 
