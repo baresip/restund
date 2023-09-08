@@ -196,3 +196,35 @@ if(STATIC)
 else()
   target_link_libraries(restund PUBLIC ${LINKLIBS})
 endif()
+
+
+##############################################################################
+#
+# Install section
+#
+
+install(TARGETS restund
+  RUNTIME
+    DESTINATION ${CMAKE_INSTALL_BINDIR}
+    COMPONENT Applications
+)
+
+if(NOT STATIC)
+  foreach(mod IN LISTS MODULES)
+    install(TARGETS ${mod}
+      LIBRARY
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/restund/modules
+        COMPONENT Applications
+    )
+  endforeach()
+endif()
+
+set(ETC_FILES
+    etc/restund.conf
+    etc/restund.auth
+)
+
+install(FILES ${ETC_FILES}
+  DESTINATION etc/restund
+  COMPONENT Applications
+)
