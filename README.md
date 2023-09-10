@@ -15,7 +15,7 @@ Distributed under BSD-3-Clause license
 * UDP, TCP, TLS and DTLS transport support
 * RFC-compliancy
 * Robust, fast, low footprint
-* Portable C89 and C99 source code
+* Portable C99 and C11 source code
 
 ## Modular Plugin Architecture:
 
