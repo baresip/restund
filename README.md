@@ -46,4 +46,17 @@ git clone https://github.com/baresip/restund
 cd restund && cmake -B build && cmake --build build -j
 ```
 
+### Define modules and static build
+
+```bash
+cmake -B build -DMODULES="stat;binding;auth;turn;filedb;syslog;status" -DSTATIC=1
+cmake --build build -j
+```
+
+### Run restund
+
+```bash
+build/restund -f etc/restund.conf -n -d
+```
+
 See [docs](docs) for more information.
