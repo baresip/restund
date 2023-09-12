@@ -11,7 +11,7 @@
 
 cmake_minimum_required(VERSION 3.18)
 
-project(restund VERSION 0.5.0 LANGUAGES C)
+project(restund VERSION 3.5.0 LANGUAGES C)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
 
@@ -79,10 +79,10 @@ endif()
 find_package(re CONFIG REQUIRED HINTS ../re/cmake)
 
 list(APPEND RE_DEFINITIONS
-  -DVERSION="${PROJECT_VERSION}"
+  VERSION="${PROJECT_VERSION}"
 )
 
-add_definitions(${RE_DEFINITIONS})
+add_compile_definitions(${RE_DEFINITIONS})
 
 include_directories(
   include
