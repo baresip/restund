@@ -225,6 +225,6 @@ set(ETC_FILES
 )
 
 install(FILES ${ETC_FILES}
-  DESTINATION etc/restund
+  DESTINATION etc
   COMPONENT Applications
 )
