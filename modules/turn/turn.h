@@ -17,6 +17,9 @@ struct turnd {
 	uint32_t allocc_cur;
 	uint32_t lifetime_max;
 	uint32_t udp_sockbuf_size;
+	mtx_t mutex;
+	bool run;
+	struct list re_map;
 
 	struct {
 		uint64_t scode_400;
@@ -35,6 +38,8 @@ struct chanlist;
 
 struct allocation {
 	struct le he;
+	struct le le_map;
+	mtx_t mutex;
 	struct tmr tmr;
 	uint8_t tid[STUN_TID_SIZE];
 	struct sa cli_addr;
@@ -73,7 +78,7 @@ struct perm;
 
 struct perm *perm_find(const struct hash *ht, const struct sa *addr);
 struct perm *perm_create(struct hash *ht, const struct sa *peer,
-			 const struct allocation *al);
+			 struct allocation *al);
 void perm_refresh(struct perm *perm);
 void perm_tx_stat(struct perm *perm, size_t bytc);
 void perm_rx_stat(struct perm *perm, size_t bytc);
