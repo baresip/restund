@@ -3,6 +3,11 @@ build:
 	[ -d build ] || cmake -B build
 	cmake --build build --parallel
 
+.PHONY: static
+static:
+	[ -d build ] || cmake -B build -DSTATIC=1
+	cmake --build build --parallel
+
 .PHONY: ninja
 ninja:
 	[ -d build ] || cmake -B build -G Ninja
