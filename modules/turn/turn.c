@@ -190,7 +190,7 @@ static bool indication_handler(struct restund_msgctx *ctx, int proto,
 	if (restund_addr_is_blocked(psa))
 		err = EPERM;
 	else
-		err = udp_send(al->rel_us, psa, &data->v.data);
+		err = udp_send(al->uks->rel_us, psa, &data->v.data);
 	if (err)
 		turnd.errc_tx++;
 	else {
@@ -243,7 +243,7 @@ static bool raw_handler(int proto, const struct sa *src,
 	if (restund_addr_is_blocked(psa))
 		err = EPERM;
 	else
-		err = udp_send(al->rel_us, psa, mb);
+		err = udp_send(al->uks->rel_us, psa, mb);
 	if (err)
 		turnd.errc_tx++;
 	else {
@@ -344,19 +344,70 @@ static void tmr_handler(void *arg)
 
 	mtx_lock(&turndp()->mutex);
 	if (!turndp()->run)
+	{
 		re_cancel();
+		goto out;
+	}
+
+	struct list *re_map = &turndp()->re_map;
+	struct list *rm_map = &turndp()->rm_map;
+	if (!list_isempty(re_map) && (!list_isempty(rm_map)))
+	{
+		goto out;
+	}
+
+	thrd_t thrd = thrd_current();
 
 	/* Reassign one allocation by time */
-	LIST_FOREACH(&turndp()->re_map, le)
+	LIST_FOREACH(re_map, le)
 	{
-		struct allocation *al = le->data;
+		struct allocation *al = list_ledata(le);
 		mtx_lock(&al->mutex);
-		udp_thread_attach(al->rel_us);
-		udp_thread_attach(al->rsv_us);
+		udp_thread_attach(al->uks->rel_us);
+		udp_thread_attach(al->uks->rsv_us);
+		al->uks->thrd = thrd;
+
 		mtx_unlock(&al->mutex);
 	}
-	list_clear(&turndp()->re_map);
+	list_clear(re_map);
 
+	le = list_head(rm_map);
+	while (le)
+	{
+		struct udp_socks *uks = list_ledata(le);
+		le = le->next;
+
+		uint64_t jif = tmr_jiffies_usec();
+		if (0 == turndp()->ts) 
+		{
+			turndp()->ts = jif;
+		}		
+
+		if ((jif - turndp()->ts) > 1000000) // 1s
+		{
+			restund_error("no processing for a long time, check thread has exited.");
+
+			mem_deref(uks->rel_us);
+			mem_deref(uks->rsv_us);
+			list_unlink(&uks->le);
+
+			mem_deref(uks);
+			turndp()->ts = 0;
+		}
+
+		if (thrd_equal(uks->thrd, thrd)) {
+			udp_thread_detach(uks->rel_us);
+			udp_thread_detach(uks->rsv_us);
+			mem_deref(uks->rel_us);
+			mem_deref(uks->rsv_us);
+
+			list_unlink(&uks->le);
+			mem_deref(uks);
+			turndp()->ts = 0;
+		}
+	}
+
+out:
 	mtx_unlock(&turndp()->mutex);
 
 	tmr_start(tmr, 10, tmr_handler, tmr);
@@ -463,7 +514,9 @@ static int module_init(void)
 	}
 
 	list_init(&turnd.re_map);
+	list_init(&turnd.rm_map);
 
+	turnd.ts = 0;
 	turnd.run = true;
 	err = mtx_init(&turnd.mutex, mtx_plain);
 	if (err) {
@@ -472,8 +525,7 @@ static int module_init(void)
 	}
 
 	for (int i = 0; i < TURN_THREADS; i++) {
-		err = thrd_create(&tid[i], thread_handler,
-				   &timers[i]);
+		err = thrd_create(&tid[i], thread_handler, &timers[i]);
 		if (err) {
 			restund_error("turn: thrd_create err: %m\n", err);
 			goto out;

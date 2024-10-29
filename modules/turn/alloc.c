@@ -52,10 +52,6 @@ static void destructor(void *arg)
 {
 	struct allocation *al = arg;
 
-	mtx_lock(&turndp()->mutex);
-	list_unlink(&al->le_map);
-	mtx_unlock(&turndp()->mutex);
-
 	hash_flush(al->perms);
 	mem_deref(al->perms);
 	mem_deref(al->chans);
@@ -65,9 +61,11 @@ static void destructor(void *arg)
 	mem_deref(al->username);
 	mem_deref(al->cli_sock);
 
-	/* @TODO check fd deref cleanup on turn worker thread */
-	mem_deref(al->rel_us);
-	mem_deref(al->rsv_us);
+	udp_handler_set(al->uks->rel_us, NULL, NULL);
+	mtx_lock(&turndp()->mutex);
+	list_unlink(&al->uks->le);
+	list_append(&turndp()->rm_map, &al->uks->le, al->uks);
+	mtx_unlock(&turndp()->mutex);
 
 	turndp()->allocc_cur--;
 }
@@ -88,6 +86,9 @@ static void udp_recv(const struct sa *src, struct mbuf *mb, void *arg)
 	struct perm *perm;
 	struct chan *chan;
 	int err;
+
+	if (!al)
+		return;
 
 	if (al->proto == IPPROTO_TCP) {
 
@@ -162,13 +163,13 @@ static int relay_listen(const struct sa *rel_addr, struct allocation *al,
 
 	for (i=0; i<PORT_TRY_MAX; i++) {
 
-		err = udp_listen(&al->rel_us, rel_addr, udp_recv, al);
+		err = udp_listen(&al->uks->rel_us, rel_addr, udp_recv, al);
 		if (err)
 			break;
 
-		err = udp_local_get(al->rel_us, &al->rel_addr);
+		err = udp_local_get(al->uks->rel_us, &al->rel_addr);
 		if (err) {
-			al->rel_us = mem_deref(al->rel_us);
+			al->uks->rel_us = mem_deref(al->uks->rel_us);
 			break;
 		}
 
@@ -178,7 +179,7 @@ static int relay_listen(const struct sa *rel_addr, struct allocation *al,
 		restund_debug("turn: try#%u: %J\n", i, &al->rel_addr);
 
 		if (sa_port(&al->rel_addr) & 0x1) {
-			al->rel_us = mem_deref(al->rel_us);
+			al->uks->rel_us = mem_deref(al->uks->rel_us);
 			continue;
 		}
 
@@ -188,20 +189,20 @@ static int relay_listen(const struct sa *rel_addr, struct allocation *al,
 		al->rsv_addr = al->rel_addr;
 		sa_set_port(&al->rsv_addr, sa_port(&al->rel_addr) + 1);
 
-		err = udp_listen(&al->rsv_us, &al->rsv_addr, NULL, NULL);
+		err = udp_listen(&al->uks->rsv_us, &al->rsv_addr, NULL, NULL);
 		if (err) {
-			al->rel_us = mem_deref(al->rel_us);
+			al->uks->rel_us = mem_deref(al->uks->rel_us);
 			continue;
 		}
 		break;
 	}
 
 	/* Release fd for new thread and re_map*/
-	udp_thread_detach(al->rel_us);
-	udp_thread_detach(al->rsv_us);
+	udp_thread_detach(al->uks->rel_us);
+	udp_thread_detach(al->uks->rsv_us);
 
 	mtx_lock(&turndp()->mutex);
-	list_append(&turndp()->re_map, &al->le_map, al);
+	list_append(&turndp()->re_map, &al->uks->le, al);
 	mtx_unlock(&turndp()->mutex);
 
 	return (i == PORT_TRY_MAX) ? EADDRINUSE : err;
@@ -233,9 +234,9 @@ static int rsvt_listen(const struct hash *ht, struct allocation *al,
 	if (!alr)
 		return ENOENT;
 
-	al->rel_us = alr->rsv_us;
-	udp_handler_set(al->rel_us, udp_recv, al);
-	alr->rsv_us = NULL;
+	al->uks->rel_us = alr->uks->rsv_us;
+	udp_handler_set(al->uks->rel_us, udp_recv, al);
+	alr->uks->rsv_us = NULL;
 	al->rel_addr = alr->rsv_addr;
 	sa_init(&alr->rsv_addr, AF_UNSPEC);
 
@@ -360,6 +361,17 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 				   STUN_ATTR_SOFTWARE, restund_software);
 		goto out;
 	}
+ 
+	al->uks = mem_zalloc(sizeof(struct udp_socks), NULL);
+	if (!al->uks) {
+		restund_warning("turn: no memory for allocation udp socks\n");
+		++turnd->reply.scode_500;
+		rerr = stun_ereply(proto, sock, src, 0, msg,
+			500, "Server Error",
+			ctx->key, ctx->keylen, ctx->fp, 1,
+			STUN_ATTR_SOFTWARE, restund_software);
+		goto out;
+	}
 
 	hash_append(turnd->ht_alloc, sa_hash(src, SA_ALL), &al->he, al);
 	tmr_start(&al->tmr, lifetime * 1000, timeout, al);
@@ -416,9 +428,9 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 		goto out;
 	}
 
-	udp_rxbuf_presz_set(al->rel_us, 4);
+	udp_rxbuf_presz_set(al->uks->rel_us, 4);
 	if (turndp()->udp_sockbuf_size > 0)
-		(void)udp_sockbuf_set(al->rel_us, turndp()->udp_sockbuf_size);
+		(void)udp_sockbuf_set(al->uks->rel_us, turndp()->udp_sockbuf_size);
 
 	restund_debug("turn: allocation %p created %s/%J/%J - %J (%us)\n",
 		      al, stun_transp_name(al->proto), &al->cli_addr,
@@ -427,7 +439,7 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 	alx = al;
 
  reply:
-	if (alx->rsv_us) {
+	if (alx->uks->rsv_us) {
 		rsv  = (uint64_t)sa_hash(src, SA_ALL) << 32;
 		rsv |= (uint64_t)sa_stunaf(&alx->rsv_addr) << 24;
 		rsv += sa_port(&alx->rsv_addr);
@@ -449,7 +461,7 @@ void allocate_request(struct turnd *turnd, struct allocation *alx,
 				STUN_ATTR_XOR_RELAY_ADDR,
 				public ? &public_addr : &alx->rel_addr,
 				STUN_ATTR_LIFETIME, &lifetime,
-				STUN_ATTR_RSV_TOKEN, alx->rsv_us ? &rsv : NULL,
+				STUN_ATTR_RSV_TOKEN, alx->uks->rsv_us ? &rsv : NULL,
 				STUN_ATTR_XOR_MAPPED_ADDR, src,
 				STUN_ATTR_SOFTWARE, restund_software);
  out:

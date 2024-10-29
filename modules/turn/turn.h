@@ -20,6 +20,8 @@ struct turnd {
 	mtx_t mutex;
 	bool run;
 	struct list re_map;
+	struct list rm_map;
+	uint64_t ts;
 
 	struct {
 		uint64_t scode_400;
@@ -36,9 +38,15 @@ struct turnd {
 
 struct chanlist;
 
+struct udp_socks{
+	struct le le;
+	thrd_t thrd;
+	struct udp_sock *rel_us;
+	struct udp_sock *rsv_us;
+};
+
 struct allocation {
 	struct le he;
-	struct le le_map;
 	mtx_t mutex;
 	struct tmr tmr;
 	uint8_t tid[STUN_TID_SIZE];
@@ -47,8 +55,7 @@ struct allocation {
 	struct sa rel_addr;
 	struct sa rsv_addr;
 	void *cli_sock;
-	struct udp_sock *rel_us;
-	struct udp_sock *rsv_us;
+	struct udp_socks *uks;
 	char *username;
 	struct hash *perms;
 	struct chanlist *chans;
