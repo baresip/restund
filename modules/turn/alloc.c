@@ -63,6 +63,7 @@ static void destructor(void *arg)
 
 	udp_handler_set(al->uks->rel_us, NULL, NULL);
 	mtx_lock(&turndp()->mutex);
+	list_unlink(&al->uks->le);
 	list_append(&turndp()->rm_map, &al->uks->le, al->uks);
 	mtx_unlock(&turndp()->mutex);
 
