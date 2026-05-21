@@ -3,7 +3,7 @@
 restund - modular STUN/TURN server
 
 - Copyright (c) 2010 - 2020 Creytiv.com
-- Copyright (C) 2020 - 2023 Baresip Foundation (https://github.com/baresip)
+- Copyright (C) 2020 - 2026 Baresip Foundation (https://github.com/baresip)
 
 Distributed under BSD-3-Clause license
 
