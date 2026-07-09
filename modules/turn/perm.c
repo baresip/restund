@@ -19,7 +19,7 @@ struct perm {
 	struct le he;
 	struct sa peer;
 	struct restund_trafstat ts;
-	const struct allocation *al;
+	struct allocation *al;
 	time_t expires;
 	time_t start;
 	bool new;
@@ -38,7 +38,9 @@ static void destructor(void *arg)
 	struct perm *perm = arg;
 	int err;
 
+	mtx_lock(&perm->al->mutex);
 	hash_unlink(&perm->he);
+	mtx_unlock(&perm->al->mutex);
 
 	restund_debug("turn: allocation %p permission %j destroyed "
 		      "(%llu/%llu %llu/%llu)\n",
@@ -90,7 +92,7 @@ struct perm *perm_find(const struct hash *ht, const struct sa *peer)
 
 
 struct perm *perm_create(struct hash *ht, const struct sa *peer,
-			 const struct allocation *al)
+			 struct allocation *al)
 {
 	const time_t now = time(NULL);
 	struct perm *perm;
@@ -102,12 +104,16 @@ struct perm *perm_create(struct hash *ht, const struct sa *peer,
 	if (!perm)
 		return NULL;
 
+	mtx_lock(&al->mutex);
+
 	hash_append(ht, sa_hash(peer, SA_ADDR), &perm->he, perm);
 
 	perm->peer = *peer;
 	perm->al = al;
 	perm->expires = now + PERM_LIFETIME;
 	perm->start = now;
+
+	mtx_unlock(&al->mutex);
 
 	restund_debug("turn: allocation %p permission %j created\n", al, peer);
 
