@@ -9,9 +9,9 @@
 # Project and Versioning
 #
 
-cmake_minimum_required(VERSION 3.18)
+cmake_minimum_required(VERSION 3.18...4.0)
 
-project(restund VERSION 3.5.1 LANGUAGES C)
+project(restund VERSION 4.9.0 LANGUAGES C)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
 
