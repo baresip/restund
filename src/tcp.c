@@ -271,7 +271,7 @@ static int listen_handler(const struct pl *val, void *arg)
 
 		(void)pl_strcpy(&cert, certpath, sizeof(certpath));
 
-		err = tls_alloc(&tl->tls, TLS_METHOD_SSLV23, certpath, NULL);
+		err = tls_alloc(&tl->tls, TLS_METHOD_TLS, certpath, NULL);
 		if (err) {
 			restund_warning("tls error: %m\n", err);
 			goto out;

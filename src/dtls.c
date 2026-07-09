@@ -180,7 +180,7 @@ static int dtls_listen_handler(const struct pl *val, void *arg)
 
 	(void)pl_strcpy(&cert, certpath, sizeof(certpath));
 
-	err = tls_alloc(&dl->tls, TLS_METHOD_DTLSV1, certpath, NULL);
+	err = tls_alloc(&dl->tls, TLS_METHOD_DTLS, certpath, NULL);
 	if (err) {
 		restund_warning("tls error: %m\n", err);
 		goto out;
